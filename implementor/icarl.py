@@ -57,12 +57,6 @@ class ICARL(Baseline):
             adding_classes_list=[self.task_step*(task_num-1),self.task_step*(task_num)]
             self.train_loader,self.test_loader=self.datasetloader.get_updated_dataloader(adding_classes_list,self.exemplar_set)
             
-            ## training info ##
-            self.optimizer = torch.optim.SGD(self.model.parameters(
-            ), self.configs['lr'], self.configs['momentum'], weight_decay=self.configs['weight_decay'], nesterov=self.configs['nesterov'])
-            lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
-                self.optimizer, self.configs['lr_steps'], self.configs['gamma'])
-            ###################
             if self.configs['task_size']>0:
                 if 'resnet' in self.configs['model']:
                     fc=self.model.module.fc
@@ -97,6 +91,12 @@ class ICARL(Baseline):
                 self.model.train()
                 self.model.to(self.device)
 
+            ## training info ##
+            self.optimizer = torch.optim.SGD(self.model.parameters(
+            ), self.configs['lr'], self.configs['momentum'], weight_decay=self.configs['weight_decay'], nesterov=self.configs['nesterov'])
+            lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
+                self.optimizer, self.configs['lr_steps'], self.configs['gamma'])
+            ###################
             for epoch in range(1, self.configs['epochs'] + 1):
                 epoch_tik = time.time()
 
@@ -134,7 +134,7 @@ class ICARL(Baseline):
                 #####################
                 lr_scheduler.step()
                 if epoch in self.configs['lr_steps']:
-                    print('Learning Rate: {:.6e}'.format(lr_scheduler.get_last_lr()))
+                    print('Learning Rate: {:.6e}'.format(lr_scheduler.get_last_lr()[0]))
                 #####################
             h,m,s=convert_secs2time(time.time()-task_tik)
             print('Task {} Finished. [Acc] {:.2f} [Running Time] {:2d}h {:2d}m {:2d}s'.format(task_num, task_best_valid_acc, h,m,s))
