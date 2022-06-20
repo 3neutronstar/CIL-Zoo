@@ -219,7 +219,7 @@ class ICARL(Baseline):
             outputs,_=self.model(images)
 
             if self.old_model == None:
-                loss = F.binary_cross_entropy_with_logits(torch.sigmoid(outputs), target_reweighted)
+                loss = F.binary_cross_entropy_with_logits(outputs, target_reweighted)
             elif self.current_num_classes>= self.task_step*2: # after two steps
                 new_outputs= outputs[:,self.current_num_classes-self.task_step:self.current_num_classes]
                 old_outputs= outputs[:,:self.current_num_classes-self.task_step]
@@ -229,8 +229,8 @@ class ICARL(Baseline):
                 old_outputs_stored,_=self.old_model(images)
                 old_target_stored = torch.sigmoid(old_outputs_stored)
                 
-                kd_loss = F.binary_cross_entropy_with_logits(torch.sigmoid(old_outputs), old_target_stored)
-                cls_loss= F.binary_cross_entropy_with_logits(torch.sigmoid(new_outputs), new_target)
+                kd_loss = F.binary_cross_entropy_with_logits(old_outputs, old_target_stored)
+                cls_loss= F.binary_cross_entropy_with_logits(new_outputs, new_target)
                 loss= kd_loss+cls_loss
 
 
