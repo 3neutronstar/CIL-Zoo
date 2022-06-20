@@ -37,14 +37,14 @@ class iCIFAR100(datasets.CIFAR100):
                           for label in range(len(exemplar_set))]
 
             for label in range(classes[0], classes[1]):
-                data = self.original_data[np.array(self.targets) == label]
+                data = self.original_data[np.array(self.original_labels) == label]
                 datas.append(data)
                 labels.append(np.full((data.shape[0]), label))
             self.data, self.targets = self.concatenate(datas, labels)
         else:
             datas, labels = [], []
             for label in range(classes[0], classes[1]):
-                data = self.original_data[np.array(self.targets) == label]
+                data = self.original_data[np.array(self.original_labels) == label]
                 datas.append(data)
                 labels.append(np.full((data.shape[0]), label))
             datas=np.concatenate(datas, axis=0)
@@ -74,4 +74,4 @@ class iCIFAR100(datasets.CIFAR100):
         return len(self.data)
 
     def get_class_images(self, cls):
-        return self.original_data[np.array(self.targets) == cls]
+        return self.original_data[np.array(self.original_labels) == cls]

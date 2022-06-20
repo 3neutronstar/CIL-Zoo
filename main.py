@@ -6,6 +6,7 @@ import sys
 import torch.nn as nn
 from data.data_load import DatasetLoader
 from implementor.baseline import Baseline
+from implementor.eeil import EEIL
 from implementor.icarl import ICARL
 from model.basenet import get_model
 from implementor.evaluator.evaluation import Evaluation
@@ -42,7 +43,7 @@ def parse_args(args):
     parser.add_argument(
         '--momentum', type=float, default=0.9, help='set momentum')
     parser.add_argument(
-        '--epochs', type=int, default=300, help='run epochs')
+        '--epochs', type=int, default=70, help='run epochs')
     parser.add_argument(
         '--dataset', type=str, default='cifar100', help='select dataset')
     parser.add_argument(
@@ -53,7 +54,7 @@ def parse_args(args):
                         type=str, help=' ex) 0,1,2')
     parser.add_argument('--detect_anomaly', default=False,
                         type=bool, help='Detect anomaly in PyTorch')
-    parser.add_argument('--lr_steps', help='lr decaying epoch determination', default=[49,63,70],
+    parser.add_argument('--lr_steps', help='lr decaying epoch determination', default=[49,63],
                         type=lambda s: [int(item) for item in s.split(',')])
     parser.add_argument('--dataset_path', help='dataset path (None: /data or .\\data\\dataset\\)', default=None)
 
@@ -167,6 +168,7 @@ def main(args):
         LEARNER = {
             'baseline': Baseline,
             'icarl': ICARL,
+            'eeil': EEIL,
         }
         learner = LEARNER[configs['train_mode']](
             model, time_data, save_path, device, configs)

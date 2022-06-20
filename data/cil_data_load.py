@@ -96,7 +96,7 @@ class CILDatasetLoader(DatasetLoader):
         if transform==None:
             transform=self.test_transform
 
-        dataset=ImageDataset(cls_images,transform)
+        dataset=ImageDataset(cls_images,transforms=transform)
 
         if self.configs['device'] == 'cuda':
             pin_memory = True
