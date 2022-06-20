@@ -219,14 +219,20 @@ class ICARL(Baseline):
             outputs,_=self.model(images)
 
             if self.old_model == None:
-                loss = F.binary_cross_entropy_with_logits(outputs, target_reweighted)
-            else:
-                #old_target = torch.tensor(np.array([self.old_model_output[index.item()] for index in indexs]))
-                old_outputs,_=self.old_model(images)
-                old_target = torch.sigmoid(old_outputs)
-                old_task_size = old_target.shape[1]
-                target_reweighted[..., :old_task_size] = old_target
-                loss = F.binary_cross_entropy_with_logits(outputs, target_reweighted)
+                loss = F.binary_cross_entropy_with_logits(torch.sigmoid(outputs), target_reweighted)
+            elif self.current_num_classes>= self.task_step*2: # after two steps
+                new_outputs= outputs[:,self.current_num_classes-self.task_step:self.current_num_classes]
+                old_outputs= outputs[:,:self.current_num_classes-self.task_step]
+                new_target= target_reweighted[:,self.current_num_classes-self.task_step:self.current_num_classes]
+                # old_target= target_reweighted[:,:self.current_num_classes-self.task_step]
+
+                old_outputs_stored,_=self.old_model(images)
+                old_target_stored = torch.sigmoid(old_outputs_stored)
+                
+                kd_loss = F.binary_cross_entropy_with_logits(torch.sigmoid(old_outputs), old_target_stored)
+                cls_loss= F.binary_cross_entropy_with_logits(torch.sigmoid(new_outputs), new_target)
+                loss= kd_loss+cls_loss
+
 
             # measure accuracy and record loss
             acc1, acc5 = accuracy(outputs, target, topk=(1, 5))
@@ -256,7 +262,6 @@ class ICARL(Baseline):
         losses = AverageMeter('Loss', ':.4e')
         top1 = AverageMeter('Acc@1', ':6.2f')
         top5 = AverageMeter('Acc@5', ':6.2f')
-        nms=AverageMeter('NMS',':6.2f')
 
         self.model.eval()
         end = time.time()
