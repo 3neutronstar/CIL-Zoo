@@ -41,6 +41,8 @@ def parse_args(args):
     parser.add_argument(
         '--momentum', type=float, default=0.9, help='set momentum')
     parser.add_argument(
+        '--temperature', type=float, default=2.0, help='set temperature of knowledge distillation')
+    parser.add_argument(
         '--epochs', type=int, default=70, help='run epochs')
     parser.add_argument(
         '--dataset', type=str, default='cifar100', help='select dataset')
