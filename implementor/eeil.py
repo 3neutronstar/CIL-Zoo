@@ -131,29 +131,31 @@ class EEIL(ICARL):
 
             ## after train- process exemplar set ##
             self.model.eval()
-            print('')
-            with torch.no_grad():
-                m = int(self.configs['memory_size']/self.current_num_classes)
-                self._reduce_exemplar_sets(m)  # exemplar reduce
-                # for each class
-                for class_id in range(self.task_step*(task_num-1), self.task_step*(task_num)):
-                    print('\r Construct class %s exemplar set...' %
-                          (class_id), end='')
-                    self._construct_exemplar_set(class_id, m)
+            ## after train- process exemplar set ##
+            if task_num != self.configs['task_size']:
+                print('')
+                with torch.no_grad():
+                    m = int(self.configs['memory_size']/self.current_num_classes)
+                    self._reduce_exemplar_sets(m)  # exemplar reduce
+                    # for each class
+                    for class_id in range(self.task_step*(task_num-1), self.task_step*(task_num)):
+                        print('\r Construct class %s exemplar set...' %
+                            (class_id), end='')
+                        self._construct_exemplar_set(class_id, m)
 
-                self.current_num_classes += self.task_step
-                self.compute_exemplar_class_mean()
-                KNN_accuracy = self._eval(
-                    valid_loader, epoch, task_num)['accuracy']
-                print("NMS accuracy: "+str(KNN_accuracy))
-                filename = 'accuracy_%.2f_KNN_accuracy_%.2f_increment_%d_net.pt' % (
-                    valid_info['accuracy'], KNN_accuracy, task_num*self.task_step)
-                torch.save(self.model, os.path.join(
-                    self.save_path, self.time_data, filename))
-                self.old_model = torch.load(os.path.join(
-                    self.save_path, self.time_data, filename))
-                self.old_model.to(self.device)
-                self.old_model.eval()
+                    self.current_num_classes += self.task_step
+                    self.compute_exemplar_class_mean()
+                    KNN_accuracy = self._eval(
+                        valid_loader, epoch, task_num)['accuracy']
+                    print("NMS accuracy: "+str(KNN_accuracy))
+                    filename = 'accuracy_%.2f_KNN_accuracy_%.2f_increment_%d_net.pt' % (
+                        valid_info['accuracy'], KNN_accuracy, task_num*self.task_step)
+                    torch.save(self.model, os.path.join(
+                        self.save_path, self.time_data, filename))
+                    self.old_model = torch.load(os.path.join(
+                        self.save_path, self.time_data, filename))
+                    self.old_model.to(self.device)
+                    self.old_model.eval()
             
             #######################################
         # End of regular learning #
@@ -232,16 +234,12 @@ class EEIL(ICARL):
                     kd_loss = torch.zeros(task_num)
                     for t in range(task_num):
                         # local distillation
-                        start_KD = t * self.configs['task_size']
-                        end_KD = (t+1) * self.configs['task_size']
 
-                        soft_target =  torch.softmax(score[:, start_KD:end_KD] / \
-                            self.configs['temperature'],dim=1)
-                        output_logits = outputs[:, start_KD:end_KD] / \
-                            self.configs['temperature']
+                        soft_target =  torch.softmax(score[:, self.current_num_classes-self.task_step:self.current_num_classes] / self.configs['temperature'],dim=1)
+                        output_logits = torch.softmax(outputs[:, self.current_num_classes-self.task_step:self.current_num_classes] / self.configs['temperature'],dim=1)
                         # kd_loss[t] = F.binary_cross_entropy_with_logits(
                         #     output_logits, soft_target) * (self.configs['temperature']**2)
-                        kd_loss[t] = - (output_logits* torch.log(soft_target)).sum(dim=1)
+                        kd_loss[t] = - (output_logits* torch.log(soft_target)).sum(dim=1).mean()
                     kd_loss = kd_loss.mean()
                 loss = kd_loss+cls_loss
 
