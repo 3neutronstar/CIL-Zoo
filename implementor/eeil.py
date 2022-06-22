@@ -16,7 +16,6 @@ from PIL import Image
 from torch.utils.data import DataLoader
 
 from utils.onehot import get_one_hot
-from utils.onehot_crossentropy import OnehotCrossEntropyLoss
 
 
 class EEIL(ICARL):
@@ -222,8 +221,8 @@ class EEIL(ICARL):
             else:  # after the normal learning
                 cls_loss = self.onehot_criterion(outputs, target_reweighted)
                 if balance_finetune:
-                    soft_target = score[:, self.current_num_classes -
-                                        self.task_step:self.current_num_classes]/self.configs['temperature']
+                    soft_target = torch.softmax(score[:, self.current_num_classes -
+                                        self.task_step:self.current_num_classes]/self.configs['temperature'],dim=1)
                     output_logits = outputs[:, self.current_num_classes -
                                             self.task_step:self.current_num_classes]/self.configs['temperature']
                     kd_loss = self.onehot_criterion(output_logits, soft_target)
@@ -235,8 +234,8 @@ class EEIL(ICARL):
                         start_KD = t * self.configs['task_size']
                         end_KD = (t+1) * self.configs['task_size']
 
-                        soft_target = score[:, start_KD:end_KD] / \
-                            self.configs['temperature']
+                        soft_target =  torch.softmax(score[:, start_KD:end_KD] / \
+                            self.configs['temperature'],dim=1)
                         output_log = outputs[:, start_KD:end_KD] / \
                             self.configs['temperature']
                         kd_loss[t] = self.onehot_criterion(
