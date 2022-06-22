@@ -164,8 +164,9 @@ class EEIL(ICARL):
         valid_info=self.balance_fine_tune()
 
         tok = time.time()
+        h,m,s=convert_secs2time(tok-tik)
         print('Total Learning Time: {:2d}h {:2d}m {:2d}s'.format(
-            convert_secs2time(tok-tik)))
+            h,m,s))
 
         ############## info save #################
         import copy
@@ -226,22 +227,21 @@ class EEIL(ICARL):
             else:  # after the normal learning
                 cls_loss = self.onehot_criterion(outputs, target_reweighted)
                 if balance_finetune:
-                    soft_target = torch.softmax(score[:, self.current_num_classes -
-                                        self.task_step:self.current_num_classes]/self.configs['temperature'],dim=1)
+                    soft_target = torch.softmax(score/self.configs['temperature'],dim=1)
                     output_logits = outputs[:, self.current_num_classes -
                                             self.task_step:self.current_num_classes]/self.configs['temperature']
-                    kd_loss = F.cross_entropy(output_logits,soft_target) # distillation entropy loss
+                    kd_loss = F.binary_cross_entropy_with_logits(output_logits,soft_target) # distillation entropy loss
                 else:
                     score, _ = self.old_model(images)
                     kd_loss = torch.zeros(task_num)
                     for t in range(task_num):
                         # local distillation
 
-                        soft_target =  torch.softmax(score[:, self.current_num_classes-self.task_step:self.current_num_classes] / self.configs['temperature'],dim=1)
+                        soft_target =  torch.softmax(score / self.configs['temperature'],dim=1)
                         output_logits = outputs[:, self.current_num_classes-self.task_step:self.current_num_classes] / self.configs['temperature']
                         # kd_loss[t] = F.binary_cross_entropy_with_logits(
                         #     output_logits, soft_target) * (self.configs['temperature']**2)
-                        kd_loss[t] = F.cross_entropy(output_logits, soft_target)
+                        kd_loss[t] = F.binary_cross_entropy_with_logits(output_logits, soft_target)
                     kd_loss = kd_loss.mean()
                 loss = kd_loss+cls_loss
 

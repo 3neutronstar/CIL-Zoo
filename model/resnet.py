@@ -231,7 +231,8 @@ class ResNet_ft(ResNet):
         out = self.relu(self.bn1(self.conv1(x)))
         feature = []
         if self.residual_len==4:
-            out=self.maxpool(out)
+            if self.maxpool:
+                out=self.maxpool(out)
             out = self.layer1(out)
             feature.append(out)
             out = self.layer2(out)
