@@ -1,4 +1,5 @@
 from data.CIL.cifar100 import iCIFAR100
+from data.CIL.imagenet import iImageNet, iTinyImageNet
 from data.custom_dataset import ImageDataset
 from data.data_load import DatasetLoader
 import os
@@ -33,18 +34,18 @@ class CILDatasetLoader(DatasetLoader):
         elif self.configs['dataset'] == 'imagenet':
             traindata_save_path = os.path.join(dataset_path, 'train')
             testdata_save_path = os.path.join(dataset_path, 'val3')
-            train_data = torchvision.datasets.ImageFolder(
-                root=traindata_save_path, transform=self.train_transform)
-            test_data = torchvision.datasets.ImageFolder(
-                root=testdata_save_path, transform=self.test_transform)
+            train_data = iImageNet(
+                root=traindata_save_path,train=True, transform=self.train_transform)
+            test_data = iImageNet(
+                root=testdata_save_path,train=False, transform=self.test_transform)
         
         elif self.configs['dataset'] == 'tiny-imagenet':
             traindata_save_path = os.path.join(dataset_path, 'train')
             testdata_save_path = os.path.join(dataset_path, 'val')
-            train_data = torchvision.datasets.ImageFolder(
-                root=traindata_save_path, transform=self.train_transform)
-            test_data = torchvision.datasets.ImageFolder(
-                root=testdata_save_path, transform=self.test_transform)
+            train_data = iTinyImageNet(
+                root=traindata_save_path,train=True, transform=self.train_transform)
+            test_data = iTinyImageNet(
+                root=testdata_save_path,train=False, transform=self.test_transform)
 
         return train_data, test_data
 

@@ -173,8 +173,9 @@ class ICARL(Baseline):
                     self.old_model.to(self.device)
                     self.old_model.eval()
         tok = time.time()
+        h,m,s=convert_secs2time(tok-tik)
         print('Total Learning Time: {:2d}h {:2d}m {:2d}s'.format(
-            convert_secs2time(tok-tik)))
+            h,m,s))
         ############## info save #################
         import copy
 
