@@ -13,12 +13,7 @@ import numpy as np
 from PIL import Image
 from torch.utils.data import DataLoader
 
-
-
-def get_one_hot(target, num_class):
-    one_hot = torch.zeros(target.shape[0], num_class).to(target.device)
-    one_hot = one_hot.scatter(dim=1, index=target.long().view(-1, 1), value=1.)
-    return one_hot
+from utils.onehot import get_one_hot
 
 
 class ICARL(Baseline):
@@ -28,8 +23,10 @@ class ICARL(Baseline):
 
         # class incremental #
         self.old_model = None
-        self.current_num_classes=int(self.configs['num_classes']//self.configs['task_size'])
-        self.task_step=int(self.configs['num_classes']//self.configs['task_size'])
+        self.current_num_classes = int(
+            self.configs['num_classes']//self.configs['task_size'])
+        self.task_step = int(
+            self.configs['num_classes']//self.configs['task_size'])
         self.exemplar_set = []
         self.class_mean_set = []
 
@@ -43,51 +40,55 @@ class ICARL(Baseline):
         self.none_reduction_criterion = nn.CrossEntropyLoss(
             reduction='none').to(self.device)
 
-
         ## training ##
         tik = time.time()
         learning_time = AverageMeter('Time', ':6.3f')
-        tasks_acc=[]
+        tasks_acc = []
         for task_num in range(1, self.configs['task_size']+1):
-            task_tik=time.time()
-            task_best_valid_acc=0
+            task_tik = time.time()
+            task_best_valid_acc = 0
             # get incremental train data
             # incremental
             self.model.eval()
-            adding_classes_list=[self.task_step*(task_num-1),self.task_step*(task_num)]
-            self.train_loader,self.test_loader=self.datasetloader.get_updated_dataloader(adding_classes_list,self.exemplar_set)
-            
-            if self.configs['task_size']>0:
+            adding_classes_list = [self.task_step *
+                                   (task_num-1), self.task_step*(task_num)]
+            self.train_loader, self.test_loader = self.datasetloader.get_updated_dataloader(
+                adding_classes_list, self.exemplar_set)
+
+            if self.configs['task_size'] > 0:
                 if 'resnet' in self.configs['model']:
-                    fc=self.model.module.fc
+                    fc = self.model.module.fc
                 elif 'densenet' in self.configs['model']:
-                    fc=self.model.module.linear
+                    fc = self.model.module.linear
                 else:
-                    raise ValueError('{} model not supported'.format(self.configs['model']))
+                    raise ValueError(
+                        '{} model not supported'.format(self.configs['model']))
                 weight = fc.weight.data
                 bias = fc.bias.data
                 in_feature = fc.in_features
                 out_feature = fc.out_features
 
                 fc = nn.Linear(in_feature, self.current_num_classes, bias=True)
-                if task_num>1: # next task to update weight
+                if task_num > 1:  # next task to update weight
                     if 'resnet' in self.configs['model']:
-                        self.model.module.fc=fc
+                        self.model.module.fc = fc
                         self.model.module.fc.weight.data[:out_feature] = weight
                         self.model.module.fc.bias.data[:out_feature] = bias
                     elif 'densenet' in self.configs['model']:
-                        self.model.module.linear=fc
+                        self.model.module.linear = fc
                         self.model.module.linear.weight.data[:out_feature] = weight
                         self.model.module.linear.bias.data[:out_feature] = bias
                     else:
-                        raise ValueError('{} model not supported'.format(self.configs['model']))
+                        raise ValueError(
+                            '{} model not supported'.format(self.configs['model']))
                 else:
                     if 'resnet' in self.configs['model']:
-                        self.model.module.fc=fc
+                        self.model.module.fc = fc
                     elif 'densenet' in self.configs['model']:
-                        self.model.module.linear=fc
-                print('{} num_classes with checksum: '.format(self.current_num_classes),fc)
-                
+                        self.model.module.linear = fc
+                print('{} num_classes with checksum: '.format(
+                    self.current_num_classes), fc)
+
                 self.model.train()
                 self.model.to(self.device)
 
@@ -100,11 +101,12 @@ class ICARL(Baseline):
             for epoch in range(1, self.configs['epochs'] + 1):
                 epoch_tik = time.time()
 
-                train_info = self._train(train_loader,epoch)
-                valid_info = self._eval(valid_loader,epoch,task_num)
+                train_info = self._train(train_loader, epoch, task_num)
+                valid_info = self._eval(valid_loader, epoch, task_num)
 
                 for key in train_info.keys():
-                    info_dict = {'train': train_info[key], 'eval': valid_info[key]}
+                    info_dict = {
+                        'train': train_info[key], 'eval': valid_info[key]}
                     self.summaryWriter.add_scalars(key, info_dict, epoch)
                     self.summaryWriter.flush()
 
@@ -113,7 +115,8 @@ class ICARL(Baseline):
                 learning_time.update(time.time()-epoch_tik)
                 if task_best_valid_acc < valid_info['accuracy']:
                     task_best_valid_acc = valid_info['accuracy']
-                    print("Task %d best accuracy: %.2f" % (task_num, task_best_valid_acc))
+                    print("Task %d best accuracy: %.2f" %
+                          (task_num, task_best_valid_acc))
                     ## save best model ##
                     if task_num == self.configs['task_size']:
                         self.best_valid_accuracy = valid_info['accuracy']
@@ -134,10 +137,12 @@ class ICARL(Baseline):
                 #####################
                 lr_scheduler.step()
                 if epoch in self.configs['lr_steps']:
-                    print('Learning Rate: {:.6e}'.format(lr_scheduler.get_last_lr()[0]))
+                    print('Learning Rate: {:.6e}'.format(
+                        lr_scheduler.get_last_lr()[0]))
                 #####################
-            h,m,s=convert_secs2time(time.time()-task_tik)
-            print('Task {} Finished. [Acc] {:.2f} [Running Time] {:2d}h {:2d}m {:2d}s'.format(task_num, task_best_valid_acc, h,m,s))
+            h, m, s = convert_secs2time(time.time()-task_tik)
+            print('Task {} Finished. [Acc] {:.2f} [Running Time] {:2d}h {:2d}m {:2d}s'.format(
+                task_num, task_best_valid_acc, h, m, s))
             tasks_acc.append(task_best_valid_acc)
             #####################
 
@@ -145,19 +150,25 @@ class ICARL(Baseline):
             self.model.eval()
             print('')
             with torch.no_grad():
-                m=int(self.configs['memory_size']/self.current_num_classes)
-                self._reduce_exemplar_sets(m) # exemplar reduce
-                for class_id in range(self.task_step*(task_num-1),self.task_step*(task_num)): # for each class
-                    print('\r Construct class %s exemplar set...'%(class_id),end='')
-                    self._construct_exemplar_set(class_id,m)
+                m = int(self.configs['memory_size']/self.current_num_classes)
+                self._reduce_exemplar_sets(m)  # exemplar reduce
+                # for each class
+                for class_id in range(self.task_step*(task_num-1), self.task_step*(task_num)):
+                    print('\r Construct class %s exemplar set...' %
+                          (class_id), end='')
+                    self._construct_exemplar_set(class_id, m)
 
-                self.current_num_classes+=self.task_step
+                self.current_num_classes += self.task_step
                 self.compute_exemplar_class_mean()
-                KNN_accuracy=self._eval(valid_loader,epoch,task_num)['accuracy']
+                KNN_accuracy = self._eval(
+                    valid_loader, epoch, task_num)['accuracy']
                 print("NMS accuracy: "+str(KNN_accuracy))
-                filename='accuracy_%.2f_KNN_accuracy_%.2f_increment_%d_net.pt' % (valid_info['accuracy'], KNN_accuracy, task_num*self.task_step)
-                torch.save(self.model,os.path.join(self.save_path,self.time_data,filename))
-                self.old_model=torch.load(os.path.join(self.save_path,self.time_data,filename))
+                filename = 'accuracy_%.2f_KNN_accuracy_%.2f_increment_%d_net.pt' % (
+                    valid_info['accuracy'], KNN_accuracy, task_num*self.task_step)
+                torch.save(self.model, os.path.join(
+                    self.save_path, self.time_data, filename))
+                self.old_model = torch.load(os.path.join(
+                    self.save_path, self.time_data, filename))
                 self.old_model.to(self.device)
                 self.old_model.eval()
 
@@ -197,7 +208,7 @@ class ICARL(Baseline):
             self.best_valid_accuracy))
         ##############
 
-    def _train(self, loader, epoch):
+    def _train(self, loader, epoch, task_num):
 
         tik = time.time()
         self.model.train()
@@ -211,28 +222,33 @@ class ICARL(Baseline):
             prefix="Epoch: [{}]".format(epoch))
         i = 0
         end = time.time()
-        for images, target,indices in loader:
+        for images, target, indices in loader:
             # measure data loading time
             images, target = images.to(
                 self.device), target.to(self.device)
             target_reweighted = get_one_hot(target, self.current_num_classes)
-            outputs,_=self.model(images)
+            outputs, _ = self.model(images)
 
             if self.old_model == None:
-                loss = F.binary_cross_entropy_with_logits(outputs, target_reweighted)
-            elif self.current_num_classes>= self.task_step*2: # after two steps
-                new_outputs= outputs[:,self.current_num_classes-self.task_step:self.current_num_classes]
-                old_outputs= outputs[:,:self.current_num_classes-self.task_step]
-                new_target= target_reweighted[:,self.current_num_classes-self.task_step:self.current_num_classes]
+                loss = F.binary_cross_entropy_with_logits(
+                    outputs, target_reweighted)
+            elif self.current_num_classes >= self.task_step*2:  # after two steps
+                new_outputs = outputs[:, self.current_num_classes -
+                                      self.task_step:self.current_num_classes]
+                old_outputs = outputs[:,
+                                      :self.current_num_classes-self.task_step]
+                new_target = target_reweighted[:, self.current_num_classes -
+                                               self.task_step:self.current_num_classes]
                 # old_target= target_reweighted[:,:self.current_num_classes-self.task_step]
 
-                old_outputs_stored,_=self.old_model(images)
+                old_outputs_stored, _ = self.old_model(images)
                 old_target_stored = torch.sigmoid(old_outputs_stored)
-                
-                kd_loss = F.binary_cross_entropy_with_logits(old_outputs, old_target_stored)
-                cls_loss= F.binary_cross_entropy_with_logits(new_outputs, new_target)
-                loss= kd_loss+cls_loss
 
+                kd_loss = F.binary_cross_entropy_with_logits(
+                    old_outputs, old_target_stored)
+                cls_loss = F.binary_cross_entropy_with_logits(
+                    new_outputs, new_target)
+                loss = kd_loss+cls_loss
 
             # measure accuracy and record loss
             acc1, acc5 = accuracy(outputs, target, topk=(1, 5))
@@ -266,8 +282,8 @@ class ICARL(Baseline):
         self.model.eval()
         end = time.time()
         i = 0
-        nms_correct=0
-        all_total=0
+        nms_correct = 0
+        all_total = 0
         with torch.no_grad():
             for images, target, indices in loader:
                 # measure data loading time
@@ -275,16 +291,19 @@ class ICARL(Baseline):
                     self.device), target.long().to(self.device)
 
                 # compute output
-                output,feature = self.model(images)
+                output, feature = self.model(images)
 
                 features = F.normalize(feature[-1])
-                if task_num!=1:
-                    class_mean_set = np.array(self.class_mean_set) # (nclasses,1,feature_dim)
-                    tensor_class_mean_set=torch.from_numpy(class_mean_set).to(self.device).permute(1,2,0) # (1,feature_dim,nclasses)
-                    x = features.unsqueeze(2) - tensor_class_mean_set # (batch_size,feature_dim,nclasses)
-                    x = torch.norm(x, p=2, dim=1) # (batch_size,nclasses)
-                    x = torch.argmin(x, dim=1) # (batch_size,)
-                    nms_results=x.cpu()
+                if task_num != 1:
+                    # (nclasses,1,feature_dim)
+                    class_mean_set = np.array(self.class_mean_set)
+                    tensor_class_mean_set = torch.from_numpy(class_mean_set).to(
+                        self.device).permute(1, 2, 0)  # (1,feature_dim,nclasses)
+                    # (batch_size,feature_dim,nclasses)
+                    x = features.unsqueeze(2) - tensor_class_mean_set
+                    x = torch.norm(x, p=2, dim=1)  # (batch_size,nclasses)
+                    x = torch.argmin(x, dim=1)  # (batch_size,)
+                    nms_results = x.cpu()
                     # nms_results = torch.stack([nms_results] * images.size(0))
                     nms_correct += (nms_results == target.cpu()).sum()
                     all_total += len(target)
@@ -301,66 +320,70 @@ class ICARL(Baseline):
                 batch_time.update(time.time() - end)
                 end = time.time()
                 i += 1
-        if task_num==1:
+        if task_num == 1:
             self.logger.info('[eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f}'.format(epoch,
-                losses.avg, top1.avg, top5.avg))
+                                                                                                      losses.avg, top1.avg, top5.avg))
         else:
             self.logger.info('[eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f} | NMS: {:.4f}'.format(epoch,
-                losses.avg, top1.avg, top5.avg, 100.*nms_correct/all_total))
+                                                                                                                    losses.avg, top1.avg, top5.avg, 100.*nms_correct/all_total))
 
         return {'loss': losses.avg, 'accuracy': top1.avg.item(), 'top5': top5.avg.item()}
-    
 
     def _reduce_exemplar_sets(self, m):
         for index in range(len(self.exemplar_set)):
             self.exemplar_set[index] = self.exemplar_set[index][:m]
-            print('The size of class %d examplar: %s' % (index, str(len(self.exemplar_set[index]))))
-
+            print('The size of class %d examplar: %s' %
+                  (index, str(len(self.exemplar_set[index]))))
 
     def _construct_exemplar_set(self, class_id, m):
-        cls_dataloader,cls_images =self.datasetloader.get_class_dataloader(class_id)
-        class_mean, feature_extractor_output = self.compute_class_mean(cls_dataloader)
+        cls_dataloader, cls_images = self.datasetloader.get_class_dataloader(
+            class_id)
+        class_mean, feature_extractor_output = self.compute_class_mean(
+            cls_dataloader)
         exemplar = []
         now_class_mean = np.zeros((1, feature_extractor_output.shape[1]))
-     
+
         for i in range(m):
             # shape：batch_size*512
-            x = class_mean - (now_class_mean + feature_extractor_output) / (i + 1)
+            x = class_mean - (now_class_mean +
+                              feature_extractor_output) / (i + 1)
             # shape：batch_size
             x = np.linalg.norm(x, axis=1)
             index = np.argmin(x)
             now_class_mean += feature_extractor_output[index]
             exemplar.append(cls_images[index])
 
-        print("The size of exemplar :%s" % (str(len(exemplar))),end='')
+        print("The size of exemplar :%s" % (str(len(exemplar))), end='')
         self.exemplar_set.append(exemplar)
-        
 
     def compute_class_mean(self, cls_dataloader):
         with torch.no_grad():
-            feature_extractor_outputs=[]
+            feature_extractor_outputs = []
             for images in cls_dataloader:
                 images = images.to(self.device)
-                _,features = self.model(images)
-                feature_extractor_outputs.append(F.normalize(features[-1]).cpu())
-        feature_extractor_outputs=torch.cat(feature_extractor_outputs,dim=0).numpy()
-        class_mean = np.mean(feature_extractor_outputs, axis=0, keepdims=True) # (feature, nclasses)
+                _, features = self.model(images)
+                feature_extractor_outputs.append(
+                    F.normalize(features[-1]).cpu())
+        feature_extractor_outputs = torch.cat(
+            feature_extractor_outputs, dim=0).numpy()
+        class_mean = np.mean(feature_extractor_outputs,
+                             axis=0, keepdims=True)  # (feature, nclasses)
         return class_mean, feature_extractor_outputs
-
 
     def compute_exemplar_class_mean(self):
         self.class_mean_set = []
         print("")
         for index in range(len(self.exemplar_set)):
-            print("\r Compute the class mean of {:2d}".format(index),end='')
-            exemplar=self.exemplar_set[index]
-            
+            print("\r Compute the class mean of {:2d}".format(index), end='')
+            exemplar = self.exemplar_set[index]
+
             # why? transform differently #
-            exemplar_dataset=ImageDataset(exemplar, transforms=self.datasetloader.test_transform)
-            exemplar_dataloader= DataLoader(exemplar_dataset, batch_size=self.configs['batch_size'],
-                                      shuffle=False,
-                                      num_workers=self.configs['num_workers'],
-                                      )
+            exemplar_dataset = ImageDataset(
+                exemplar, transforms=self.datasetloader.test_transform)
+            exemplar_dataloader = DataLoader(exemplar_dataset, batch_size=self.configs['batch_size'],
+                                             shuffle=False,
+                                             num_workers=self.configs['num_workers'],
+                                             )
             class_mean, _ = self.compute_class_mean(exemplar_dataloader)
             self.class_mean_set.append(class_mean)
         print("")

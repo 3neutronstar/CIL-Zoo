@@ -40,7 +40,7 @@ def get_model(configs):
             configs['model']='pretrained_'+configs['model']
 
 
-    if configs['mode']=='train' and configs['train_mode'] in ['icarl']:
+    if configs['mode']=='train' and configs['train_mode'] in ['icarl','eeil']:
         if isinstance(model, ResNet):
             model=ResNet_ft(configs)
     return model

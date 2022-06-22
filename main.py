@@ -3,8 +3,6 @@ import argparse
 import time
 import os
 import sys
-import torch.nn as nn
-from data.data_load import DatasetLoader
 from implementor.baseline import Baseline
 from implementor.eeil import EEIL
 from implementor.icarl import ICARL
@@ -49,7 +47,7 @@ def parse_args(args):
     parser.add_argument(
         '--memory_size', type=int, default=2000, help='exemplar set size')
     parser.add_argument(
-        '--task_size', type=int, default=5, help='exemplar set size')
+        '--task_size', type=int, default=5, help='the number of task 5, 10 , 20, 25, 50, etc.')
     parser.add_argument('--gpu_ids', default='0',
                         type=str, help=' ex) 0,1,2')
     parser.add_argument('--detect_anomaly', default=False,
@@ -60,7 +58,7 @@ def parse_args(args):
 
     if parser.parse_known_args(args)[0].mode.lower() == 'train':
         parser.add_argument(
-            '--train_mode', '-t', type=str, default='baseline', choices=['baseline','icarl'],
+            '--train_mode', '-t', type=str, default='baseline', choices=['baseline','icarl','eeil'],
             help='Choose Train Mode')
 
     elif parser.parse_known_args(args)[0].mode.lower() == 'eval':
