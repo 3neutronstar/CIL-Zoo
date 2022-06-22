@@ -1,3 +1,4 @@
+import copy
 from data.cil_data_load import CILDatasetLoader
 from data.custom_dataset import ImageDataset
 from implementor.baseline import Baseline
@@ -147,39 +148,39 @@ class ICARL(Baseline):
             #####################
 
             ## after train- process exemplar set ##
-            self.model.eval()
-            print('')
-            with torch.no_grad():
-                m = int(self.configs['memory_size']/self.current_num_classes)
-                self._reduce_exemplar_sets(m)  # exemplar reduce
-                # for each class
-                for class_id in range(self.task_step*(task_num-1), self.task_step*(task_num)):
-                    print('\r Construct class %s exemplar set...' %
-                          (class_id), end='')
-                    self._construct_exemplar_set(class_id, m)
+            if task_num != self.configs['task_size']:
+                self.model.eval()
+                print('')
+                with torch.no_grad():
+                    m = int(self.configs['memory_size']/self.current_num_classes)
+                    self._reduce_exemplar_sets(m)  # exemplar reduce
+                    # for each class
+                    for class_id in range(self.task_step*(task_num-1), self.task_step*(task_num)):
+                        print('\r Construct class %s exemplar set...' %
+                            (class_id), end='')
+                        self._construct_exemplar_set(class_id, m)
 
-                self.current_num_classes += self.task_step
-                self.compute_exemplar_class_mean()
-                KNN_accuracy = self._eval(
-                    valid_loader, epoch, task_num)['accuracy']
-                print("NMS accuracy: "+str(KNN_accuracy))
-                filename = 'accuracy_%.2f_KNN_accuracy_%.2f_increment_%d_net.pt' % (
-                    valid_info['accuracy'], KNN_accuracy, task_num*self.task_step)
-                torch.save(self.model, os.path.join(
-                    self.save_path, self.time_data, filename))
-                self.old_model = torch.load(os.path.join(
-                    self.save_path, self.time_data, filename))
-                self.old_model.to(self.device)
-                self.old_model.eval()
-
+                    self.current_num_classes += self.task_step
+                    self.compute_exemplar_class_mean()
+                    KNN_accuracy = self._eval(
+                        valid_loader, epoch, task_num)['accuracy']
+                    print("NMS accuracy: "+str(KNN_accuracy))
+                    filename = 'accuracy_%.2f_KNN_accuracy_%.2f_increment_%d_net.pt' % (
+                        valid_info['accuracy'], KNN_accuracy, task_num*self.task_step)
+                    torch.save(self.model, os.path.join(
+                        self.save_path, self.time_data, filename))
+                    self.old_model = torch.load(os.path.join(
+                        self.save_path, self.time_data, filename))
+                    self.old_model.to(self.device)
+                    self.old_model.eval()
         tok = time.time()
-        print('Total Running Time: {:2d}h {:2d}m {:2d}s'.format(
-            convert_secs2time(time.time()-tik)))
-        ##############
+        print('Total Learning Time: {:2d}h {:2d}m {:2d}s'.format(
+            convert_secs2time(tok-tik)))
+        ############## info save #################
         import copy
 
         df_dict = copy.deepcopy(self.configs)
-        df_dict.update({'learning_time': tok-tik,
+        df_dict.update({'learning_time': learning_time,
                         'time': self.time_data,
                         'valid_loss': self.best_valid_loss,
                         'valid_acc': self.best_valid_accuracy,
@@ -230,7 +231,7 @@ class ICARL(Baseline):
             outputs, _ = self.model(images)
 
             if self.old_model == None:
-                loss = F.binary_cross_entropy_with_logits(
+                loss = self.onehot_criterion(
                     outputs, target_reweighted)
             elif self.current_num_classes >= self.task_step*2:  # after two steps
                 new_outputs = outputs[:, self.current_num_classes -
@@ -244,9 +245,9 @@ class ICARL(Baseline):
                 old_outputs_stored, _ = self.old_model(images)
                 old_target_stored = torch.sigmoid(old_outputs_stored)
 
-                kd_loss = F.binary_cross_entropy_with_logits(
+                kd_loss = self.onehot_criterion(
                     old_outputs, old_target_stored)
-                cls_loss = F.binary_cross_entropy_with_logits(
+                cls_loss = self.onehot_criterion(
                     new_outputs, new_target)
                 loss = kd_loss+cls_loss
 
@@ -387,3 +388,6 @@ class ICARL(Baseline):
             class_mean, _ = self.compute_class_mean(exemplar_dataloader)
             self.class_mean_set.append(class_mean)
         print("")
+    
+    def update_old_model(self):
+        self.old_model = copy.deepcopy(self.model)

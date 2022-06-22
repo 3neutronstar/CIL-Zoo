@@ -28,6 +28,7 @@ class Baseline:
         self.best_valid_loss=0.0
         ############
 
+        self.onehot_criterion = OnehotCrossEntropyLoss()
         
 
     def run(self,dataset_path):
