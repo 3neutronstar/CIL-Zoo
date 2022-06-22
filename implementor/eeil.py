@@ -122,6 +122,8 @@ class EEIL(ICARL):
                         lr_scheduler.get_last_lr()[0]))
                 if task_best_valid_acc < valid_info['accuracy']:
                     task_best_valid_acc = valid_info['accuracy']
+                    print("Task %d best accuracy: %.2f" %
+                          (task_num, task_best_valid_acc))
                 #####################
             h, m, s = convert_secs2time(time.time()-task_tik)
             print('Task {} Finished. [Acc] {:.2f} [Running Time] {:2d}h {:2d}m {:2d}s'.format(
@@ -228,7 +230,7 @@ class EEIL(ICARL):
                                         self.task_step:self.current_num_classes]/self.configs['temperature'],dim=1)
                     output_logits = torch.softmax(outputs[:, self.current_num_classes -
                                             self.task_step:self.current_num_classes]/self.configs['temperature'],dim=1)
-                    kd_loss = - (output_logits* torch.log(soft_target)).sum(dim=1) # distillation entropy loss
+                    kd_loss = - (output_logits* torch.log(soft_target)).sum(dim=1).mean() # distillation entropy loss
                 else:
                     score, _ = self.old_model(images)
                     kd_loss = torch.zeros(task_num)
@@ -295,7 +297,7 @@ class EEIL(ICARL):
                     # (batch_size,feature_dim,nclasses)
                     x = features.unsqueeze(2) - tensor_class_mean_set
                     x = torch.norm(x, p=2, dim=1)  # (batch_size,nclasses)
-                    x = torch.argmin(x, dim=1)  # (batch_size,)
+                    x = torch.argmax(x, dim=1)  # (batch_size,)
                     nms_results = x.cpu()
                     # nms_results = torch.stack([nms_results] * images.size(0))
                     nms_correct += (nms_results == target.cpu()).sum()

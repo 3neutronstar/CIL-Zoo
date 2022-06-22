@@ -320,7 +320,10 @@ class ICARL(Baseline):
                 batch_time.update(time.time() - end)
                 end = time.time()
                 i += 1
+        if task_num == 1:
             self.logger.info('[eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f}'.format(epoch, losses.avg, top1.avg, top5.avg))
+        else:
+            self.logger.info('[eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f} | NMS: {:.4f}'.format(epoch, losses.avg, top1.avg, top5.avg, 100.*nms_correct/all_total))
 
         return {'loss': losses.avg, 'accuracy': top1.avg.item(), 'top5': top5.avg.item()}
     
