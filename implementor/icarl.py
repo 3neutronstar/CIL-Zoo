@@ -148,6 +148,9 @@ class ICARL(Baseline):
             #####################
 
             ## after train- process exemplar set ##
+            KNN_accuracy = self._eval(
+                valid_loader, epoch, task_num)['accuracy']
+            print("NMS accuracy: "+str(KNN_accuracy))
             if task_num != self.configs['task_size']:
                 self.model.eval()
                 print('')
@@ -159,12 +162,8 @@ class ICARL(Baseline):
                         print('\r Construct class %s exemplar set...' %
                             (class_id), end='')
                         self._construct_exemplar_set(class_id, m)
-
                     self.current_num_classes += self.task_step
                     self.compute_exemplar_class_mean()
-                    KNN_accuracy = self._eval(
-                        valid_loader, epoch, task_num)['accuracy']
-                    print("NMS accuracy: "+str(KNN_accuracy))
                     filename = 'accuracy_%.2f_KNN_accuracy_%.2f_increment_%d_net.pt' % (
                         valid_info['accuracy'], KNN_accuracy, task_num*self.task_step)
                     torch.save(self.model, os.path.join(
@@ -303,7 +302,7 @@ class ICARL(Baseline):
                     # (batch_size,feature_dim,nclasses)
                     x = features.unsqueeze(2) - tensor_class_mean_set
                     x = torch.norm(x, p=2, dim=1)  # (batch_size,nclasses)
-                    x = torch.argmin(x, dim=1)  # (batch_size,)
+                    x = torch.argmax(x, dim=1)  # (batch_size,)
                     nms_results = x.cpu()
                     # nms_results = torch.stack([nms_results] * images.size(0))
                     nms_correct += (nms_results == target.cpu()).sum()
@@ -321,20 +320,17 @@ class ICARL(Baseline):
                 batch_time.update(time.time() - end)
                 end = time.time()
                 i += 1
-        if task_num == 1:
-            self.logger.info('[eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f}'.format(epoch,
-                                                                                                      losses.avg, top1.avg, top5.avg))
-        else:
-            self.logger.info('[eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f} | NMS: {:.4f}'.format(epoch,
-                                                                                                                    losses.avg, top1.avg, top5.avg, 100.*nms_correct/all_total))
+            self.logger.info('[eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f}'.format(epoch, losses.avg, top1.avg, top5.avg))
 
         return {'loss': losses.avg, 'accuracy': top1.avg.item(), 'top5': top5.avg.item()}
+    
 
     def _reduce_exemplar_sets(self, m):
+        print("Reducing exemplar sets!")
         for index in range(len(self.exemplar_set)):
             self.exemplar_set[index] = self.exemplar_set[index][:m]
-            print('The size of class %d examplar: %s' %
-                  (index, str(len(self.exemplar_set[index]))))
+            print('\rThe size of class %d examplar: %s' % (index, str(len(self.exemplar_set[index]))),end='')
+
 
     def _construct_exemplar_set(self, class_id, m):
         cls_dataloader, cls_images = self.datasetloader.get_class_dataloader(
