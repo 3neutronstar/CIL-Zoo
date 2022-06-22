@@ -156,7 +156,8 @@ class EEIL(ICARL):
                 self.old_model.eval()
             
             #######################################
-            valid_info=self.balance_fine_tune()
+        # End of regular learning #
+        valid_info=self.balance_fine_tune()
 
         tok = time.time()
         print('Total Learning Time: {:2d}h {:2d}m {:2d}s'.format(
@@ -223,9 +224,9 @@ class EEIL(ICARL):
                 if balance_finetune:
                     soft_target = torch.softmax(score[:, self.current_num_classes -
                                         self.task_step:self.current_num_classes]/self.configs['temperature'],dim=1)
-                    output_logits = outputs[:, self.current_num_classes -
-                                            self.task_step:self.current_num_classes]/self.configs['temperature']
-                    kd_loss = self.onehot_criterion(output_logits, soft_target)
+                    output_logits = torch.softmax(outputs[:, self.current_num_classes -
+                                            self.task_step:self.current_num_classes]/self.configs['temperature'],dim=1)
+                    kd_loss = - (output_logits* torch.log(soft_target)).sum(dim=1) # distillation entropy loss
                 else:
                     score, _ = self.old_model(images)
                     kd_loss = torch.zeros(task_num)
@@ -236,10 +237,11 @@ class EEIL(ICARL):
 
                         soft_target =  torch.softmax(score[:, start_KD:end_KD] / \
                             self.configs['temperature'],dim=1)
-                        output_log = outputs[:, start_KD:end_KD] / \
+                        output_logits = outputs[:, start_KD:end_KD] / \
                             self.configs['temperature']
-                        kd_loss[t] = self.onehot_criterion(
-                            output_log, soft_target) * (self.configs['temperature']**2)
+                        # kd_loss[t] = F.binary_cross_entropy_with_logits(
+                        #     output_logits, soft_target) * (self.configs['temperature']**2)
+                        kd_loss[t] = - (output_logits* torch.log(soft_target)).sum(dim=1)
                     kd_loss = kd_loss.mean()
                 loss = kd_loss+cls_loss
 
