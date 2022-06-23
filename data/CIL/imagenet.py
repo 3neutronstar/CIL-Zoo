@@ -48,7 +48,10 @@ class iImageNet(datasets.ImageFolder):
         return len(self.data)
 
     def get_class_images(self, cls):
-        return self.samples[np.array(self.targets) == cls]
+        cls_images=[]
+        for i in (np.array(self.targets)==cls).nonzero():
+            cls_images.append(self.samples)
+        return cls_images
 
     def __getitem__(self, index: int):
         """

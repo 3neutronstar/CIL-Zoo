@@ -380,7 +380,7 @@ class ICARL(Baseline):
 
             # why? transform differently #
             exemplar_dataset = ImageDataset(
-                exemplar, transforms=self.datasetloader.test_transform)
+                exemplar, transform=self.datasetloader.test_transform)
             exemplar_dataloader = DataLoader(exemplar_dataset, batch_size=self.configs['batch_size'],
                                              shuffle=False,
                                              num_workers=self.configs['num_workers'],
