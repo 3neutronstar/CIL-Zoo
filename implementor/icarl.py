@@ -303,7 +303,7 @@ class ICARL(Baseline):
                     # (batch_size,feature_dim,nclasses)
                     x = features.unsqueeze(2) - tensor_class_mean_set
                     x = torch.norm(x, p=2, dim=1)  # (batch_size,nclasses)
-                    x = torch.argmax(x, dim=1)  # (batch_size,)
+                    x = torch.argmin(x, dim=1)  # (batch_size,)
                     nms_results = x.cpu()
                     # nms_results = torch.stack([nms_results] * images.size(0))
                     nms_correct += (nms_results == target.cpu()).sum()
