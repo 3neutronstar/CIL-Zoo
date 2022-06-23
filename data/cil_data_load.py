@@ -91,13 +91,13 @@ class CILDatasetLoader(DatasetLoader):
         print("Updated classes index ", num_classes)
         return train_data_loader, test_data_loader
 
-    def get_class_dataloader(self,cls,transform=None):
+    def get_class_dataloader(self,cls,transform=None,no_return_target=False):
         cls_images=self.train_data.get_class_images(cls)
 
         if transform==None:
             transform=self.test_transform
 
-        dataset=ImageDataset(cls_images,transform=transform, no_return_target=True)
+        dataset=ImageDataset(cls_images,transform=transform,no_return_target=no_return_target)
 
         if self.configs['device'] == 'cuda':
             pin_memory = True

@@ -338,7 +338,7 @@ class ICARL(Baseline):
 
     def _construct_exemplar_set(self, class_id, m):
         cls_dataloader, cls_images = self.datasetloader.get_class_dataloader(
-            class_id)
+            class_id,no_return_target=True)
         class_mean, feature_extractor_output = self.compute_class_mean(
             cls_dataloader)
         exemplar = []
