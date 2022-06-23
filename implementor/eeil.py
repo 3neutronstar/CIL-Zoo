@@ -227,7 +227,8 @@ class EEIL(ICARL):
             else:  # after the normal learning
                 cls_loss = self.onehot_criterion(outputs, target_reweighted)
                 if balance_finetune:
-                    soft_target = torch.softmax(score/self.configs['temperature'],dim=1)
+                    soft_target = torch.softmax(score[:, self.current_num_classes -
+                                            self.task_step:self.current_num_classes]/self.configs['temperature'],dim=1)
                     output_logits = outputs[:, self.current_num_classes -
                                             self.task_step:self.current_num_classes]/self.configs['temperature']
                     kd_loss = F.binary_cross_entropy_with_logits(output_logits,soft_target) # distillation entropy loss
@@ -237,8 +238,8 @@ class EEIL(ICARL):
                     for t in range(task_num):
                         # local distillation
 
-                        soft_target =  torch.softmax(score / self.configs['temperature'],dim=1)
-                        output_logits = outputs[:, self.current_num_classes-self.task_step:self.current_num_classes] / self.configs['temperature']
+                        soft_target =  torch.softmax(score [:,self.task_step*t:self.task_step*(t+1)] / self.configs['temperature'],dim=1)
+                        output_logits = outputs[:,self.task_step*t:self.task_step*(t+1)] / self.configs['temperature']
                         # kd_loss[t] = F.binary_cross_entropy_with_logits(
                         #     output_logits, soft_target) * (self.configs['temperature']**2)
                         kd_loss[t] = F.binary_cross_entropy_with_logits(output_logits, soft_target)
