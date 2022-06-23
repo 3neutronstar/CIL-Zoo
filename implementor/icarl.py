@@ -360,7 +360,7 @@ class ICARL(Baseline):
     def compute_class_mean(self, cls_dataloader):
         with torch.no_grad():
             feature_extractor_outputs = []
-            for images in cls_dataloader:
+            for images,_ in cls_dataloader:
                 images = images.to(self.device)
                 _, features = self.model(images)
                 feature_extractor_outputs.append(

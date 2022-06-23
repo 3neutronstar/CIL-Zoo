@@ -29,4 +29,4 @@ class ImageDataset(Dataset):
         if self.y is not None:
             return (data, self.y[i])
         else:
-            return data
+            return data, None
