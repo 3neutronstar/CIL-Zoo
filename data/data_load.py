@@ -60,6 +60,8 @@ class DatasetLoader:
                     transforms.RandomCrop((32, 32)),
                     transforms.RandomHorizontalFlip(),
                     transforms.ToTensor(),
+                    ColorJitter(brightness=0.63),
+                    transforms.ColorJitter(contrast=(0.2,1.8)),
                     normalize,
                 ])
         elif configs['dataset'] == 'cifar10':
