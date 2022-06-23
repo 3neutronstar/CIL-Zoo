@@ -24,8 +24,10 @@ class iImageNet(datasets.ImageFolder):
         if self.train:  # exemplar_set
             datas = []
             if len(exemplar_set) != 0:
-                datas = [exemplar for exemplar in exemplar_set]
-
+                datas = []
+                # datas = [exemplar for exemplar in exemplar_set]
+                for exemplar in exemplar_set:
+                    datas.extend(exemplar)
             for label in range(classes[0], classes[1]):
                 for i in (np.array(self.targets) == label).nonzero()[0]:
                     datas.append(self.samples[i])
@@ -49,7 +51,7 @@ class iImageNet(datasets.ImageFolder):
 
     def get_class_images(self, cls):
         cls_images=[]
-        for i in (np.array(self.targets)==cls).nonzero():
+        for i in (np.array(self.targets)==cls).nonzero()[0]:
             cls_images.append(self.samples[i])
         return cls_images
 
@@ -60,7 +62,6 @@ class iImageNet(datasets.ImageFolder):
         Returns:
             tuple: (sample, target) where target is class_index of the target class.
         """
-
         path, target = self.data[index]
         sample = self.loader(path)
         if self.transform is not None:

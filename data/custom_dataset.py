@@ -14,14 +14,14 @@ class ImageDataset(Dataset):
     
     def __getitem__(self, i):
         data = self.X[i]
-
-        if isinstance(data,tuple):
+        if isinstance(data,tuple) or isinstance(data,list):
             path, target = data
             sample = self.loader(path)
             if self.transform is not None:
                 sample = self.transform(sample)
             if self.target_transform is not None:
                 target = self.target_transform(target)
+            print(self.no_return_target)
             if self.no_return_target:
                 return sample
             return sample, target

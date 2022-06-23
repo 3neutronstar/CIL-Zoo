@@ -338,7 +338,7 @@ class ICARL(Baseline):
 
     def _construct_exemplar_set(self, class_id, m):
         cls_dataloader, cls_images = self.datasetloader.get_class_dataloader(
-            class_id)
+            class_id,no_return_target=True)
         class_mean, feature_extractor_output = self.compute_class_mean(
             cls_dataloader)
         exemplar = []
@@ -360,7 +360,7 @@ class ICARL(Baseline):
     def compute_class_mean(self, cls_dataloader):
         with torch.no_grad():
             feature_extractor_outputs = []
-            for images,_ in cls_dataloader:
+            for images in cls_dataloader:
                 images = images.to(self.device)
                 _, features = self.model(images)
                 feature_extractor_outputs.append(
@@ -380,7 +380,7 @@ class ICARL(Baseline):
 
             # why? transform differently #
             exemplar_dataset = ImageDataset(
-                exemplar, transform=self.datasetloader.test_transform)
+                exemplar, transform=self.datasetloader.test_transform,no_return_target=True)
             exemplar_dataloader = DataLoader(exemplar_dataset, batch_size=self.configs['batch_size'],
                                              shuffle=False,
                                              num_workers=self.configs['num_workers'],
