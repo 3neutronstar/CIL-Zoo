@@ -237,8 +237,10 @@ class EEIL(ICARL):
                     kd_loss = torch.zeros(task_num)
                     for t in range(task_num):
                         # local distillation
-
-                        soft_target =  torch.softmax(score [:,self.task_step*t:self.task_step*(t+1)] / self.configs['temperature'],dim=1)
+                        if task_num>1:
+                            soft_target = torch.softmax(score [:,self.task_step*t:self.task_step*(t+1)] / self.configs['temperature'],dim=1)
+                        else:
+                            soft_target = torch.softmax(score/self.configs['temperature'], dim=1)
                         output_logits = outputs[:,self.task_step*t:self.task_step*(t+1)] / self.configs['temperature']
                         # kd_loss[t] = F.binary_cross_entropy_with_logits(
                         #     output_logits, soft_target) * (self.configs['temperature']**2)

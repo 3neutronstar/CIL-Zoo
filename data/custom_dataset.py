@@ -1,5 +1,6 @@
 from torch.utils.data.dataset import Dataset
 from torchvision.datasets.folder import default_loader
+
 class ImageDataset(Dataset):
     def __init__(self, images, labels=None, transform=None,target_transform=None,no_return_target=False):
         self.X = images
@@ -15,7 +16,7 @@ class ImageDataset(Dataset):
     def __getitem__(self, i):
         data = self.X[i]
 
-        if isinstance(data,tuple):
+        if isinstance(data,tuple) or isinstance(data,list):
             path, target = data
             sample = self.loader(path)
             if self.transform is not None:

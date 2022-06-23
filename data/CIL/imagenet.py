@@ -49,7 +49,7 @@ class iImageNet(datasets.ImageFolder):
 
     def get_class_images(self, cls):
         cls_images=[]
-        for i in (np.array(self.targets)==cls).nonzero():
+        for i in (np.array(self.targets)==cls).nonzero()[0]:
             cls_images.append(self.samples[i])
         return cls_images
 
