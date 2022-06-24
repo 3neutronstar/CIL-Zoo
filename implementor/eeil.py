@@ -167,6 +167,8 @@ class EEIL(ICARL):
         h,m,s=convert_secs2time(tok-tik)
         print('Total Learning Time: {:2d}h {:2d}m {:2d}s'.format(
             h,m,s))
+        str_acc=' '.join("{:.2f}".format(x) for x in tasks_acc)
+        print("Task Accs:",str_acc)
 
         ############## info save #################
         import copy
