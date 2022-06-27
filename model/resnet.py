@@ -150,7 +150,10 @@ class ResNet(nn.Module): # Follow CutMix
             self.conv1 = nn.Conv2d(3, initial_channels, kernel_size=3,
                                    stride=1, padding=1, bias=False)
             self.bn1 = nn.BatchNorm2d(16)
-            self.avgpool = nn.AvgPool2d(8)
+            if configs['dataset']=='tiny-imagenet' and configs['tiny_resize'] ==False:
+                self.avgpool=nn.AdaptiveMaxPool2d(1)
+            else:
+                self.avgpool = nn.AvgPool2d(8)
             stride_list = [1, 2, 2]
             self.layer1 = self._make_layer(
                 block, initial_channels, num_blocks[0], stride=stride_list[0])
