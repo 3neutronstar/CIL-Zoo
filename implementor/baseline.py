@@ -151,7 +151,7 @@ class Baseline:
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
-            if i % int(len(loader)//3) == 0:
+            if i % int(len(loader)//2) == 0:
                 progress.display(i)
             i += 1
 

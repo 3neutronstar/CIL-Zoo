@@ -28,6 +28,7 @@ class iImageNet(datasets.ImageFolder):
                 # datas = [exemplar for exemplar in exemplar_set]
                 for exemplar in exemplar_set:
                     datas.extend(exemplar)
+                self.bft_data = datas
             for label in range(classes[0], classes[1]):
                 for i in (np.array(self.targets) == label).nonzero()[0]:
                     datas.append(self.samples[i])
@@ -42,6 +43,7 @@ class iImageNet(datasets.ImageFolder):
                 self.data.extend(datas)
             else:
                 self.data = datas
+            self.bft_data=self.data
 
         str_train = 'train' if self.train else 'test'
         print("The size of {} set is {}".format(str_train, len(self.data)))
@@ -69,6 +71,9 @@ class iImageNet(datasets.ImageFolder):
         if self.target_transform is not None:
             target = self.target_transform(target)
         return sample, target, index
+    
+    def get_bft_data(self):
+        return self.bft_data
 
 class iTinyImageNet(iImageNet):
     def __init__(self, root,

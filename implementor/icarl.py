@@ -234,22 +234,29 @@ class ICARL(Baseline):
                 loss = F.binary_cross_entropy_with_logits(
                     outputs, target_reweighted)
             elif self.current_num_classes >= self.task_step*2:  # after two steps
-                new_outputs = outputs[:, self.current_num_classes -
-                                      self.task_step:self.current_num_classes]
-                old_outputs = outputs[:,
-                                      :self.current_num_classes-self.task_step]
-                new_target = target_reweighted[:, self.current_num_classes -
-                                               self.task_step:self.current_num_classes]
-                # old_target= target_reweighted[:,:self.current_num_classes-self.task_step]
+                # new_outputs = outputs[:, self.current_num_classes -
+                #                       self.task_step:self.current_num_classes]
+                # old_outputs = outputs[:,
+                #                       :self.current_num_classes-self.task_step]
+                # new_target = target_reweighted[:, self.current_num_classes -
+                #                                self.task_step:self.current_num_classes]
+                # # old_target= target_reweighted[:,:self.current_num_classes-self.task_step]
 
-                old_outputs_stored, _ = self.old_model(images)
-                old_target_stored = torch.sigmoid(old_outputs_stored)
+                # old_outputs_stored, _ = self.old_model(images)
+                # old_target_stored = torch.sigmoid(old_outputs_stored)
 
-                kd_loss = F.binary_cross_entropy_with_logits(
-                    old_outputs, old_target_stored)
-                cls_loss = F.binary_cross_entropy_with_logits(
-                    new_outputs, new_target)
-                loss = kd_loss+cls_loss
+                # kd_loss = F.binary_cross_entropy_with_logits(
+                #     old_outputs, old_target_stored)
+                # cls_loss = F.binary_cross_entropy_with_logits(
+                #     new_outputs, new_target)
+                # loss = kd_loss+cls_loss
+                old_target,_=self.old_model(images)
+                old_target=torch.sigmoid(old_target)
+                old_task_size = old_target.shape[1]
+                # print(old_task_size,old_target.shape,target.shape)
+                target_reweighted[..., :old_task_size] = old_target
+                loss = F.binary_cross_entropy_with_logits(
+                    outputs, target_reweighted)
 
             # measure accuracy and record loss
             acc1, acc5 = accuracy(outputs, target, topk=(1, 5))
@@ -264,7 +271,7 @@ class ICARL(Baseline):
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
-            if i % int(len(loader)//3) == 0:
+            if i % int(len(loader)//2) == 0:
                 progress.display(i)
             i += 1
 

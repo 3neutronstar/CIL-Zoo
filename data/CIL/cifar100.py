@@ -18,6 +18,8 @@ class iCIFAR100(datasets.CIFAR100):
                                         download=download)
         self.original_data = copy.deepcopy(self.data)
         self.original_labels = copy.deepcopy(self.targets)
+        self.bft_data=None
+        self.bft_label=None
 
     def concatenate(self, datas, labels):
         con_data = datas[0]
@@ -35,6 +37,7 @@ class iCIFAR100(datasets.CIFAR100):
                 length = len(datas[0])
                 labels = [np.full((length), label)
                           for label in range(len(exemplar_set))]
+                self.bft_data, self.bft_label = self.concatenate(datas, labels)
 
             for label in range(classes[0], classes[1]):
                 data = self.original_data[np.array(self.original_labels) == label]
@@ -55,6 +58,8 @@ class iCIFAR100(datasets.CIFAR100):
             else:
                 self.data = datas
                 self.targets = labels
+            self.bft_data = self.data
+            self.bft_label= self.targets
         str_train = 'train' if self.train else 'test'
         print("The size of {} set is {}".format(str_train, self.data.shape))
         print("The size of {} label is {}".format(
@@ -75,3 +80,12 @@ class iCIFAR100(datasets.CIFAR100):
 
     def get_class_images(self, cls):
         return self.original_data[np.array(self.original_labels) == cls]
+
+    def get_bft_data(self):
+        self.bft_datas=[]
+        self.bft_labels=[]
+        for index in range(len(self.bft_data)):
+            img, target = Image.fromarray(self.bft_data[index]), self.bft_label[index]
+            self.bft_datas.append(img)
+            self.bft_labels.append(target)
+        return (self.bft_datas, self.bft_labels)

@@ -14,7 +14,7 @@ import torch.nn.functional as F
 import numpy as np
 from PIL import Image
 from torch.utils.data import DataLoader
-
+import copy
 from utils.onehot import get_one_hot
 
 
@@ -36,7 +36,7 @@ class EEIL(ICARL):
     def run(self, dataset_path):
         self.datasetloader = CILDatasetLoader(
             self.configs, dataset_path, self.device)
-        train_loader, valid_loader = self.datasetloader.get_dataloader()
+        train_loader, valid_loader = self.datasetloader.get_dataloader() #init for once
 
         ## Hyper Parameter setting ##
         self.criterion = nn.CrossEntropyLoss().to(self.device)
@@ -47,15 +47,17 @@ class EEIL(ICARL):
         tik = time.time()
         learning_time = AverageMeter('Time', ':6.3f')
         tasks_acc = []
+
+        # Task Init loader #
+        self.model.eval()
+        adding_classes_list = [self.task_step *
+                                0, self.task_step]
+        train_loader, valid_loader = self.datasetloader.get_updated_dataloader(
+            adding_classes_list, self.exemplar_set) # update for class incremental style #
+        ####################
+
         for task_num in range(1, self.configs['task_size']+1):
             task_tik = time.time()
-            # get incremental train data
-            # incremental
-            self.model.eval()
-            adding_classes_list = [self.task_step *
-                                   (task_num-1), self.task_step*(task_num)]
-            self.train_loader, self.test_loader = self.datasetloader.get_updated_dataloader(
-                adding_classes_list, self.exemplar_set)
 
             if self.configs['task_size'] > 0:
                 if 'resnet' in self.configs['model']:
@@ -95,16 +97,16 @@ class EEIL(ICARL):
                 self.model.to(self.device)
 
             ## training info ##
-            self.optimizer = torch.optim.SGD(self.model.parameters(
+            optimizer = torch.optim.SGD(self.model.parameters(
             ), self.configs['lr'], self.configs['momentum'], weight_decay=self.configs['weight_decay'], nesterov=self.configs['nesterov'])
             lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
-                self.optimizer, self.configs['lr_steps'], self.configs['gamma'])
+                optimizer, self.configs['lr_steps'], self.configs['gamma'])
             ###################
             task_best_valid_acc=0
             for epoch in range(1, self.configs['epochs'] + 1):
                 epoch_tik = time.time()
 
-                train_info = self._train(train_loader, epoch, task_num)
+                train_info = self._train(train_loader,optimizer, epoch, task_num)
                 valid_info = self._eval(valid_loader, epoch, task_num)
 
                 for key in train_info.keys():
@@ -131,37 +133,45 @@ class EEIL(ICARL):
             tasks_acc.append(task_best_valid_acc)
             #####################
 
+
             ## after train- process exemplar set ##
             self.model.eval()
-            ## after train- process exemplar set ##
-            if task_num != self.configs['task_size']:
-                print('')
-                with torch.no_grad():
-                    m = int(self.configs['memory_size']/self.current_num_classes)
-                    self._reduce_exemplar_sets(m)  # exemplar reduce
-                    # for each class
-                    for class_id in range(self.task_step*(task_num-1), self.task_step*(task_num)):
-                        print('\r Construct class %s exemplar set...' %
-                            (class_id), end='')
-                        self._construct_exemplar_set(class_id, m)
+            print('')
+            with torch.no_grad():
+                m = int(self.configs['memory_size']/self.current_num_classes)
+                self._reduce_exemplar_sets(m)  # exemplar reduce
+                # for each class
+                for class_id in range(self.task_step*(task_num-1), self.task_step*(task_num)):
+                    print('\r Construct class %s exemplar set...' %
+                        (class_id), end='')
+                    self._construct_exemplar_set(class_id, m)
 
-                    self.current_num_classes += self.task_step
-                    self.compute_exemplar_class_mean()
-                    KNN_accuracy = self._eval(
-                        valid_loader, epoch, task_num)['accuracy']
-                    print("NMS accuracy: "+str(KNN_accuracy))
-                    filename = 'accuracy_%.2f_KNN_accuracy_%.2f_increment_%d_net.pt' % (
-                        valid_info['accuracy'], KNN_accuracy, task_num*self.task_step)
-                    torch.save(self.model, os.path.join(
-                        self.save_path, self.time_data, filename))
-                    self.old_model = torch.load(os.path.join(
-                        self.save_path, self.time_data, filename))
-                    self.old_model.to(self.device)
-                    self.old_model.eval()
-            
+                self.compute_exemplar_class_mean()
+                KNN_accuracy = self._eval(
+                    valid_loader, epoch, task_num)['accuracy']
+                print("NMS accuracy: "+str(KNN_accuracy))
+                filename = 'accuracy_%.2f_KNN_accuracy_%.2f_increment_%d_net.pt' % (
+                    valid_info['accuracy'], KNN_accuracy, task_num*self.task_step)
+                torch.save(self.model, os.path.join(
+                    self.save_path, self.time_data, filename))
+                self.old_model = torch.load(os.path.join(
+                    self.save_path, self.time_data, filename))
+                self.old_model.to(self.device)
+                self.old_model.eval()
+
+            # get finetuned data #
+            train_loader, valid_loader = self.datasetloader.get_updated_dataloader(
+                (self.current_num_classes-self.task_step,self.current_num_classes), self.exemplar_set)
+            # End of regular learning: FineTuning #
+            bft_train_loader, bft_valid_loader = self.datasetloader.get_bft_dataloader()
+            valid_info=self.balance_fine_tune(bft_train_loader, bft_valid_loader)
+            print("Fine-tune accuracy: %.2f" % valid_info['accuracy'])
             #######################################
-        # End of regular learning #
-        valid_info=self.balance_fine_tune()
+            
+            self.current_num_classes += self.task_step
+            train_loader, valid_loader = self.datasetloader.get_updated_dataloader(
+                (self.current_num_classes-self.task_step,self.current_num_classes), self.exemplar_set)
+            #######################################
 
         tok = time.time()
         h,m,s=convert_secs2time(tok-tik)
@@ -201,7 +211,7 @@ class EEIL(ICARL):
             self.best_valid_accuracy))
         ##############
 
-    def _train(self, loader, epoch, task_num, balance_finetune=False):
+    def _train(self, loader, optimizer, epoch, task_num, balance_finetune=False):
 
         tik = time.time()
         self.model.train()
@@ -226,6 +236,7 @@ class EEIL(ICARL):
                 loss = self.onehot_criterion(outputs, target_reweighted)
             else:  # after the normal learning
                 cls_loss = self.onehot_criterion(outputs, target_reweighted)
+                score, _ = self.old_model(images)
                 if balance_finetune:
                     soft_target = torch.softmax(score[:, self.current_num_classes -
                                             self.task_step:self.current_num_classes]/self.configs['temperature'],dim=1)
@@ -233,7 +244,6 @@ class EEIL(ICARL):
                                             self.task_step:self.current_num_classes]/self.configs['temperature']
                     kd_loss = F.binary_cross_entropy_with_logits(output_logits,soft_target) # distillation entropy loss
                 else:
-                    score, _ = self.old_model(images)
                     kd_loss = torch.zeros(task_num)
                     for t in range(task_num-1):
                         # local distillation
@@ -251,14 +261,14 @@ class EEIL(ICARL):
             top1.update(acc1[0]*100.0, images.size(0))
             top5.update(acc5[0]*100.0, images.size(0))
             # compute gradient and do SGD step
-            self.optimizer.zero_grad()
+            optimizer.zero_grad()
             loss.backward()
-            self.optimizer.step()
+            optimizer.step()
 
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
-            if i % int(len(loader)//3) == 0:
+            if i % int(len(loader)//2) == 0:
                 progress.display(i)
             i += 1
 
@@ -289,7 +299,7 @@ class EEIL(ICARL):
                 output, feature = self.model(images)
 
                 features = F.normalize(feature[-1])
-                if task_num != 1:
+                if task_num > 1:
                     # (nclasses,1,feature_dim)
                     class_mean_set = np.array(self.class_mean_set)
                     tensor_class_mean_set = torch.from_numpy(class_mean_set).to(
@@ -302,7 +312,8 @@ class EEIL(ICARL):
                     # nms_results = torch.stack([nms_results] * images.size(0))
                     nms_correct += (nms_results == target.cpu()).sum()
                     all_total += len(target)
-
+                if task_num ==0:
+                    print(target)
                 loss = self.criterion(output, target)
 
                 # measure accuracy and record loss
@@ -315,7 +326,7 @@ class EEIL(ICARL):
                 batch_time.update(time.time() - end)
                 end = time.time()
                 i += 1
-        if task_num == 1:
+        if task_num <= 1:
             self.logger.info('[eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f}'.format(epoch,
                                                                                                       losses.avg, top1.avg, top5.avg))
         else:
@@ -324,14 +335,11 @@ class EEIL(ICARL):
 
         return {'loss': losses.avg, 'accuracy': top1.avg.item(), 'top5': top5.avg.item()}
 
-    def balance_fine_tune(self):
-        self.update_old_model()
+    def balance_fine_tune(self,train_loader,valid_loader):
+        self.old_model = copy.deepcopy(self.model)
+        # self.update_old_model()
         optimizer = torch.optim.SGD(self.model.parameters(
         ), lr=self.configs['lr']/10.0, momentum=self.configs['momentum'], weight_decay=self.configs['weight_decay'])
-
-        # all the classes of exemplar set should be contained in the training set
-        train_loader, test_loader = self.datasetloader.get_updated_dataloader(
-            (self.current_num_classes-self.task_step,self.current_num_classes), self.exemplar_set)
 
         bftepoch = int(self.configs['epochs']*3./4.)
         bft_lr_steps= [int(3./4.*a) for a in self.configs['lr_steps']]
@@ -340,9 +348,9 @@ class EEIL(ICARL):
         task_best_valid_acc = 0
         print('==start fine-tuning==')
         for epoch in range(bftepoch):
-            self._train(train_loader, epoch, 0, balance_finetune=True)
+            self._train(train_loader, optimizer, epoch, 0, balance_finetune=True)
             lr_scheduler.step()
-            valid_info=self._eval(test_loader, epoch, 0)
+            valid_info=self._eval(valid_loader, epoch, 0)
             if task_best_valid_acc < valid_info['accuracy']:
                 task_best_valid_acc = valid_info['accuracy']
                 ## save best model ##
