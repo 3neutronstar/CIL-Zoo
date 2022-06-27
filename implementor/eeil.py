@@ -316,8 +316,6 @@ class EEIL(ICARL):
                     # nms_results = torch.stack([nms_results] * images.size(0))
                     nms_correct += (nms_results == target.cpu()).sum()
                     all_total += len(target)
-                if task_num ==0:
-                    print(target)
                 loss = self.criterion(output, target)
 
                 # measure accuracy and record loss
