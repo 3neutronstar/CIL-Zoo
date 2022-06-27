@@ -176,6 +176,8 @@ class ICARL(Baseline):
         h,m,s=convert_secs2time(tok-tik)
         print('Total Learning Time: {:2d}h {:2d}m {:2d}s'.format(
             h,m,s))
+        str_acc=' '.join("{:.2f}".format(x) for x in tasks_acc)
+        print("Task Accs:",str_acc)
         ############## info save #################
         import copy
 
@@ -310,7 +312,7 @@ class ICARL(Baseline):
                     # (batch_size,feature_dim,nclasses)
                     x = features.unsqueeze(2) - tensor_class_mean_set
                     x = torch.norm(x, p=2, dim=1)  # (batch_size,nclasses)
-                    x = torch.argmax(x, dim=1)  # (batch_size,)
+                    x = torch.argmin(x, dim=1)  # (batch_size,)
                     nms_results = x.cpu()
                     # nms_results = torch.stack([nms_results] * images.size(0))
                     nms_correct += (nms_results == target.cpu()).sum()

@@ -177,6 +177,8 @@ class EEIL(ICARL):
         h,m,s=convert_secs2time(tok-tik)
         print('Total Learning Time: {:2d}h {:2d}m {:2d}s'.format(
             h,m,s))
+        str_acc=' '.join("{:.2f}".format(x) for x in tasks_acc)
+        print("Task Accs:",str_acc)
 
         ############## info save #################
         import copy
@@ -242,7 +244,8 @@ class EEIL(ICARL):
                                             self.task_step:self.current_num_classes]/self.configs['temperature'],dim=1)
                     output_logits = outputs[:, self.current_num_classes -
                                             self.task_step:self.current_num_classes]/self.configs['temperature']
-                    kd_loss = F.binary_cross_entropy_with_logits(output_logits,soft_target) # distillation entropy loss
+                    kd_loss = self.onehot_criterion(output_logits,soft_target) # distillation entropy loss
+                    # kd_loss = F.binary_cross_entropy_with_logits(output_logits,soft_target) # distillation entropy loss
                 else:
                     kd_loss = torch.zeros(task_num)
                     for t in range(task_num-1):
@@ -251,7 +254,8 @@ class EEIL(ICARL):
                         output_logits = outputs[:,self.task_step*t:self.task_step*(t+1)] / self.configs['temperature']
                         # kd_loss[t] = F.binary_cross_entropy_with_logits(
                         #     output_logits, soft_target) * (self.configs['temperature']**2)
-                        kd_loss[t] = F.binary_cross_entropy_with_logits(output_logits, soft_target)
+                        kd_loss[t] = self.onehot_criterion(output_logits, soft_target)
+                        # kd_loss[t] = F.binary_cross_entropy_with_logits(output_logits, soft_target)
                     kd_loss = kd_loss.mean()
                 loss = kd_loss+cls_loss
 
@@ -307,7 +311,7 @@ class EEIL(ICARL):
                     # (batch_size,feature_dim,nclasses)
                     x = features.unsqueeze(2) - tensor_class_mean_set
                     x = torch.norm(x, p=2, dim=1)  # (batch_size,nclasses)
-                    x = torch.argmax(x, dim=1)  # (batch_size,)
+                    x = torch.argmin(x, dim=1)  # (batch_size,)
                     nms_results = x.cpu()
                     # nms_results = torch.stack([nms_results] * images.size(0))
                     nms_correct += (nms_results == target.cpu()).sum()
