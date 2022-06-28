@@ -4,13 +4,15 @@ import numpy as np
 from PIL import Image
 import copy
 
+from implementor.eeil import data_augmentation_e2e
+
 
 class iCIFAR100(datasets.CIFAR100):
     def __init__(self, root,
                  train=True,
                  transform=None,
                  target_transform=None,
-                 download=False):
+                 download=False,eeil_aug=False):
         super(iCIFAR100, self).__init__(root,
                                         train=train,
                                         transform=transform,
@@ -20,6 +22,7 @@ class iCIFAR100(datasets.CIFAR100):
         self.original_labels = copy.deepcopy(self.targets)
         self.bft_data=None
         self.bft_label=None
+        self.eeil_aug=eeil_aug
 
     def concatenate(self, datas, labels):
         con_data = datas[0]
@@ -73,6 +76,11 @@ class iCIFAR100(datasets.CIFAR100):
         print("The size of {} set is {}".format(str_train, self.data.shape))
         print("The size of {} label is {}".format(
             str_train, self.targets.shape))
+        if self.eeil_aug:
+            self.data, self.targets = data_augmentation_e2e(self.data, self.targets)
+            print("The size of {} set is {}".format(str_train, self.data.shape))
+            print("The size of {} label is {}".format(
+                str_train, self.targets.shape))
 
     def __getitem__(self, index):
         img, target = Image.fromarray(self.data[index]), self.targets[index]
