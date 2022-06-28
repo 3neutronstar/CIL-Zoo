@@ -18,6 +18,7 @@ class iImageNet(datasets.ImageFolder):
         self.train=train
         self.data = copy.deepcopy(self.samples)
         self.ground_targets = []
+        self.bft_data = None
 
 
     def update(self, classes, exemplar_set=list()):
@@ -28,22 +29,25 @@ class iImageNet(datasets.ImageFolder):
                 # datas = [exemplar for exemplar in exemplar_set]
                 for exemplar in exemplar_set:
                     datas.extend(exemplar)
-                self.bft_data = datas
+                if self.bft_data is None:
+                    self.bft_data = copy.deepcopy(datas)
+                else:
+                    self.bft_data=self.bft_data.extend(datas)    
             for label in range(classes[0], classes[1]):
                 for i in (np.array(self.targets) == label).nonzero()[0]:
                     datas.append(self.samples[i])
             self.data=datas
+            if self.bft_data is None:
+                self.bft_data = datas
         else:
             datas = []
             for label in range(classes[0], classes[1]):
                 for i in (np.array(self.targets) == label).nonzero()[0]:
                     datas.append(self.samples[i])
-
             if classes[0]!=0:
                 self.data.extend(datas)
             else:
                 self.data = datas
-            self.bft_data=self.data
 
         str_train = 'train' if self.train else 'test'
         print("The size of {} set is {}".format(str_train, len(self.data)))

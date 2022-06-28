@@ -37,13 +37,19 @@ class iCIFAR100(datasets.CIFAR100):
                 length = len(datas[0])
                 labels = [np.full((length), label)
                           for label in range(len(exemplar_set))]
-                self.bft_data, self.bft_label = self.concatenate(datas, labels)
+                bft_data, bft_label = self.concatenate(datas, labels)
+                if self.bft_data is None:
+                    self.bft_data,self.bft_label = bft_data, bft_label
+                else:
+                    self.bft_data = np.concatenate((self.bft_data, bft_data), axis=0)
+                    self.bft_label = np.concatenate((self.bft_label, bft_label), axis=0)
 
             for label in range(classes[0], classes[1]):
                 data = self.original_data[np.array(self.original_labels) == label]
                 datas.append(data)
                 labels.append(np.full((data.shape[0]), label))
             self.data, self.targets = self.concatenate(datas, labels)
+            
         else:
             datas, labels = [], []
             for label in range(classes[0], classes[1]):
@@ -58,8 +64,11 @@ class iCIFAR100(datasets.CIFAR100):
             else:
                 self.data = datas
                 self.targets = labels
-            self.bft_data = self.data
-            self.bft_label= self.targets
+            # if self.bft_data is not None:
+            #     self.bft_data = np.concatenate((self.bft_data, datas), axis=0)
+            #     self.bft_label = np.concatenate((self.bft_label, labels), axis=0)
+            # self.bft_data = self.data
+            # self.bft_label= self.targets
         str_train = 'train' if self.train else 'test'
         print("The size of {} set is {}".format(str_train, self.data.shape))
         print("The size of {} label is {}".format(

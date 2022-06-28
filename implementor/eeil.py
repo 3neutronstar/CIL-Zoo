@@ -160,11 +160,12 @@ class EEIL(ICARL):
                 self.old_model.eval()
 
             # get finetuned data #
-            train_loader, valid_loader = self.datasetloader.get_updated_dataloader(
+            train_loader, new_valid_loader = self.datasetloader.get_updated_dataloader(
                 (self.current_num_classes-self.task_step,self.current_num_classes), self.exemplar_set)
             # End of regular learning: FineTuning #
-            bft_train_loader, bft_valid_loader = self.datasetloader.get_bft_dataloader()
-            valid_info=self.balance_fine_tune(bft_train_loader, bft_valid_loader)
+            bft_train_loader = self.datasetloader.get_bft_dataloader()
+            valid_info=self.balance_fine_tune(bft_train_loader, valid_loader)
+            valid_loader = new_valid_loader
             print("Fine-tune accuracy: %.2f" % valid_info['accuracy'])
             #######################################
             
@@ -332,8 +333,7 @@ class EEIL(ICARL):
             self.logger.info('[eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f}'.format(epoch,
                                                                                                       losses.avg, top1.avg, top5.avg))
         else:
-            self.logger.info('[eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f} | NMS: {:.4f}'.format(epoch,
-                                                                                                                    losses.avg, top1.avg, top5.avg, 100.*nms_correct/all_total))
+            self.logger.info('[eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f} | NMS: {:.4f}'.format(epoch, losses.avg, top1.avg, top5.avg, 100.*nms_correct/all_total))
 
         return {'loss': losses.avg, 'accuracy': top1.avg.item(), 'top5': top5.avg.item()}
 

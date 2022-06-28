@@ -113,17 +113,13 @@ class CILDatasetLoader(DatasetLoader):
     
     def get_bft_dataloader(self):
         bft_train_data=self.train_data.get_bft_data()
-        bft_test_data=self.test_data.get_bft_data()
         if len(bft_train_data)==2:
             bft_train_dataset=ImageDataset(bft_train_data[0],bft_train_data[1],transform=self.train_transform,return_index=True)
-            bft_test_dataset=ImageDataset(bft_test_data[0],bft_test_data[1],transform=self.test_transform,return_index=True)
         else: # len ==1
             bft_train_dataset=ImageDataset(bft_train_data[0],transform=self.train_transform,return_index=True)
-            bft_test_dataset=ImageDataset(bft_test_data[0],transform=self.test_transform,return_index=True)
 
         train_loader = self._get_loader(True, bft_train_dataset)
-        test_loader = self._get_loader(False, bft_test_dataset)
-        return train_loader, test_loader
+        return train_loader
 
     def _get_loader(self,shuffle,dataset):
         if self.configs['device'] == 'cuda':
