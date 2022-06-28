@@ -4,7 +4,7 @@ import numpy as np
 from PIL import Image
 import copy
 
-from implementor.eeil import data_augmentation_e2e
+from utils.eeil_augmentation import data_augmentation_e2e
 
 
 class iCIFAR100(datasets.CIFAR100):

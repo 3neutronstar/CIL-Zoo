@@ -57,8 +57,8 @@ def parse_args(args):
     parser.add_argument('--lr_steps', help='lr decaying epoch determination', default=[49,63],
                         type=lambda s: [int(item) for item in s.split(',')])
     parser.add_argument('--dataset_path', help='dataset path (None: /data or .\\data\\dataset\\)', default=None)
-    parser.add_argument('--eeil_aug',type=bool,default=False,help="Apply EEIL Aug")
-    
+
+
     if parser.parse_known_args(args)[0].mode.lower() == 'train':
         parser.add_argument(
             '--train_mode', '-t', type=str, default='baseline', choices=['baseline','icarl','eeil'],
@@ -75,6 +75,11 @@ def parse_args(args):
         parser.add_argument('--tiny_resize', type=bool,
                             default=False, help='choose 224 size or 64')
 
+    if parser.parse_known_args(args)[0].train_mode.lower()=='eeil':
+        eeil_aug=True
+    else:
+        eeil_aug=False
+    parser.add_argument('--eeil_aug',type=bool,default=eeil_aug,help="Apply EEIL Aug")
     return parser.parse_known_args(args)[0]
 
 
