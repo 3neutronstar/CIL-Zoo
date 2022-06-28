@@ -1,4 +1,5 @@
 import numpy as np
+import time
 def data_augmentation_e2e(img, lab):
     """
         Realize the data augmentation in End-to-End paper
