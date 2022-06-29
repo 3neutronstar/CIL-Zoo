@@ -17,7 +17,6 @@ from torch.utils.data import DataLoader
 import copy
 from utils.onehot import get_one_hot
 
-
 class EEIL(ICARL):
     def __init__(self, model, time_data, save_path, device, configs):
         super(ICARL, self).__init__(
@@ -30,7 +29,6 @@ class EEIL(ICARL):
             self.configs['num_classes']//self.configs['task_size'])
         self.exemplar_set = []
         self.class_mean_set = []
-
 
 
     def run(self, dataset_path):

@@ -28,7 +28,7 @@ class CILDatasetLoader(DatasetLoader):
         
         if self.configs['dataset'] == 'cifar100':
             train_data = iCIFAR100(root=dataset_path, train=True,
-                                           download=True, transform=self.train_transform)
+                                           download=True, transform=self.train_transform,eeil_aug=self.configs['eeil_aug'])
             test_data = iCIFAR100(root=dataset_path, train=False,
                                           download=False, transform=self.test_transform)
         elif self.configs['dataset'] == 'imagenet':
