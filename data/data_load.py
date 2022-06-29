@@ -54,16 +54,6 @@ class DatasetLoader:
                 transforms.ToTensor(),
                 normalize,
             ])
-            if self.configs['train_mode']=='eeil':
-                self.train_transform = transforms.Compose([
-                    transforms.Pad(4),
-                    transforms.RandomCrop((32, 32)),
-                    transforms.RandomHorizontalFlip(),
-                    transforms.ToTensor(),
-                    ColorJitter(brightness=0.63),
-                    transforms.ColorJitter(contrast=(0.2,1.8)),
-                    normalize,
-                ])
         elif configs['dataset'] == 'cifar10':
             normalize = transforms.Normalize(
                 mean=mean, std=std)
