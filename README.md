@@ -1,20 +1,22 @@
-# RelatedWork
+# Class Incremental Learning Zoo - pytorch version
+Unofficial pytorch version of reproducing the method of class incremental learning (Working) in classification
+
+Currently only CIFAR100 dataset is available.
 
 - How to Implement (iCaRL)
 ```
-    python main.py train --train-mode icarl --gpu-ids 0,1 --model resnet32
+    python main.py train --train-mode icarl --gpu-ids 0 --model resnet32
 ```
 
-- How to Implement (EEIL)
+- How to Implement (EEIL, with BiC setting)
 ```
     python main.py train --train-mode eeil --gpu-ids 2 --task-size 10 --model resnet32 --batch-size 128 --lr 0.1 --gamma 0.1 --epochs 250 --lr-steps 100,150,200 --weight-decay 0.0002
 ```
 
-
-- How to Implement (EEIL+NI)
+- How to Implement (EEIL, with EEIL setting)
 ```
-    python main.py train --train-mode eeil --gpu-ids 1 --task-size 10 --model resnet34 --batch-size 128 --lr 0.1 --gamma 0.1 --epochs 250 --lr-steps 100,150,200 --weight-decay 0.0002 --natural-inversion True --inversion_epochs 2000
-``` 
+    python main.py train --train-mode eeil --gpu-ids 2 --task-size 10 --model resnet32 --batch-size 128 --lr 0.1 --gamma 0.1 --epochs 40 --lr-steps 10,20,30 --weight-decay 0.0001
+```
 
 - How to Implement (BiC)
 ```
@@ -45,3 +47,7 @@
 | iCaRL   |      |      |      |       |       |      |       |      |       |      |       |       |       |       |       |       |       |       |       |       |
 | EEIL    | 84.4 | 83.3 | 75.4 | 69.65 | 70.36 | 65.6 | 63.86 | 56.8 | 54.29 | 52.3 | 50.42 | 48.32 | 47.95 | 45.39 | 43.12 | 42.81 | 40.58 | 40.46 | 39.65 | 36.12 |
 | BiC     |      |      |      |       |       |      |       |      |       |      |       |       |       |       |       |       |       |       |       |       |
+
+
+### Reference
+iCaRL construct exemplar set is borrowed from [iCaRL-pytorch](https://github.com/DRSAD/iCaRL/blob/master/iCaRL.py)
