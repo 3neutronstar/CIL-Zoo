@@ -10,7 +10,6 @@ from utils.logger import convert_secs2time
 import numpy as np
 from utils.onehot import get_one_hot
 from implementor.eeil import EEIL
-import torch.optim as optim
 import torch.nn.functional as F
 
 
@@ -28,24 +27,16 @@ class BiC(EEIL):
     def __init__(self, model, time_data, save_path, device, configs):
         super().__init__(
             model, time_data, save_path, device, configs)
-        # bias correction layer
         self.bias_layers = []
-        self.bias_optimizers = []
-        for i in range(0, self.configs['task_size']-1):
-            self.bias_layers.append(BiasLayer().to(self.device))
-            self.bias_optimizers.append(optim.Adam(
-                self.bias_layers[i].parameters(), lr=0.001))
 
-    def bias_forward(self, x, task_num):
+    def bias_forward(self, x, task_num, bias_layer):
         if task_num == 1:
             return x
         else:
-            outputs = []
-            s = self.task_step
-            for i in range(task_num - 1):
-                outputs.append(self.bias_layers[i](x[:, s*i:s*(i+1)]))
-            outputs.append(x[:, s*(i+1):])
-            return torch.cat(outputs, dim=1)
+            idx = self.task_step
+            x_old = x[:, :idx*(task_num-1)]
+            x_new = bias_layer(x[:, idx*(task_num-1):])
+            return torch.cat((x_old, x_new), dim=1)
 
     def run(self, dataset_path):
         self.datasetloader = CILDatasetLoader(
@@ -79,12 +70,10 @@ class BiC(EEIL):
             ), self.configs['lr'], self.configs['momentum'], weight_decay=self.configs['weight_decay'], nesterov=self.configs['nesterov'])
             lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
                 optimizer, self.configs['lr_steps'], self.configs['gamma'])
-            adding_classes_list = [self.task_step *
-                                   (task_num-1), self.task_step*task_num]
-            self.datasetloader.train_data.update(
-                adding_classes_list, self.exemplar_set)  # update for class incremental style #
-            self.datasetloader.test_data.update(
-                adding_classes_list, self.exemplar_set)  # Don't need to update loader
+            
+            # Task Init loader #
+            self.construct_task_dataset(task_num,valid_loader)
+            self.bias_layers.append(BiasLayer().to(self.device))
 
             ## for BiC split 9:1 ##
             if task_num > 1:
@@ -93,9 +82,10 @@ class BiC(EEIL):
                 bic_labels = []
                 train_images = []
                 train_labels = []
-                for cls_idx in range(0, self.current_num_classes-self.task_step):  # for old class
-                    len_cls_data = len(
-                        dataset.data[dataset.targets == cls_idx])
+                for cls_idx in range(0, self.current_num_classes):  # for old class
+                    if cls_idx==0:
+                        len_cls_data = len(
+                            dataset.data[dataset.targets == cls_idx])
                     bic_images.append(dataset.data[dataset.targets == cls_idx][:int(
                         len_cls_data*(1-self.configs['split_ratio']))])
                     bic_labels.append(dataset.targets[dataset.targets == cls_idx][:int(
@@ -110,6 +100,7 @@ class BiC(EEIL):
                     train_images, axis=0)
                 self.datasetloader.train_data.targets = np.concatenate(
                     train_labels, axis=0)
+                print("Train dataset shape:",self.datasetloader.train_data.data.shape,"Bic dataset Shape:",bic_images.shape)
                 bic_dataset = self.dataset_class(
                     bic_images, bic_labels, transform=self.datasetloader.test_transform, return_idx=True)
                 bic_loader = self.datasetloader.get_dataloader(
@@ -148,8 +139,9 @@ class BiC(EEIL):
                         'model': model_dict,
                         # 'optim': optimizer_dict,
                     }
-                    save_dict.update(
-                        {'task{}_bias_model_{}'.format(task_num, i): self.bias_layers[i].state_dict() for i in range(task_num-1)})
+                    if task_num>1:
+                        save_dict.update(
+                            {'task{}_bias_model_{}'.format(task_num, i): self.bias_layers[i].state_dict() for i in range(task_num-1)})
 
                     torch.save(save_dict, os.path.join(
                         self.save_path, self.time_data, 'best_task{}_main_trained_model.pt'.format(task_num)))
@@ -168,10 +160,7 @@ class BiC(EEIL):
                 bic_info = self.train_bias_correction(
                     bic_loader, valid_loader, epoch, task_num)
                 after_bic_tasks_acc.append(bic_info['accuracy'])
-
-            ## after train- process exemplar set ##
-            ## for BiC split 9:1 and then reassemble ##
-            if task_num > 1:
+                ## for BiC split 9:1 and then reassemble ##
                 if 'cifar' in self.configs['dataset']:
                     self.datasetloader.train_data.data = np.concatenate(
                         (self.datasetloader.train_data.data, bic_images), axis=0)
@@ -179,25 +168,14 @@ class BiC(EEIL):
                         (self.datasetloader.train_data.targets, bic_labels), axis=0)
                 else:
                     raise NotImplementedError
-            #######################
-            self.model.eval()
-            print('')
-            with torch.no_grad():
-                m = int(self.configs['memory_size'] /
-                        self.current_num_classes)
-                self._reduce_exemplar_sets(m)  # exemplar reduce
-                # for each class
-                for class_id in range(self.task_step*(task_num-1), self.task_step*(task_num)):
-                    print('\r Construct class %s exemplar set...' %
-                            (class_id), end='')
-                    self._construct_exemplar_set(class_id, m)
-
-                self.compute_exemplar_class_mean()
-                KNN_accuracy = self._eval(
-                    valid_loader, epoch, task_num)['accuracy']
-                self.logger.info(
-                    "NMS accuracy: {}".format(str(KNN_accuracy)))
-
+                print("BiC alpha:",end='')
+                for i in range(task_num-1):
+                    print("{:.3f} ".format(self.bias_layers[i].alpha.item()),end='')
+                print("")
+                print("BiC beta:",end='')
+                for i in range(task_num-1):
+                    print("{:.3f} ".format(self.bias_layers[i].beta.item()),end='')
+                print("==== End Bias Correction ====")
             self.current_num_classes += self.task_step
             #######################################
 
@@ -258,16 +236,16 @@ class BiC(EEIL):
             # measure data loading time
             images, target = images.to(
                 self.device), target.to(self.device)
-            target_reweighted = get_one_hot(target, self.current_num_classes)
+            # target_reweighted = get_one_hot(target, self.current_num_classes)
             outputs, _ = self.model(images)
 
             if task_num == 1:
-                loss = self.onehot_criterion(outputs, target_reweighted)
+                loss = self.criterion(outputs, target)
             else:  # after the normal learning
-                cls_loss = self.onehot_criterion(outputs, target_reweighted)
+                cls_loss = self.criterion(outputs, target)
                 with torch.no_grad():
                     score, _ = self.old_model(images)
-                    outputs = self.bias_forward(outputs, task_num)
+                    score=self.bias_forward(score, task_num, self.bias_layers[task_num-1])
                 kd_loss = torch.zeros(task_num)
                 for t in range(task_num-1):
                     # local distillation
@@ -298,12 +276,12 @@ class BiC(EEIL):
             i += 1
 
         tok = time.time()
-        self.logger.info('[train] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f} | time: {:.3f}'.format(
-            losses.avg, top1.avg, top5.avg, tok-tik))
+        self.logger.info('[{:2d}/{:2d} task train] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f} | time: {:.3f}'.format(
+            task_num,self.configs['task_size'], losses.avg, top1.avg, top5.avg, tok-tik))
         optimizer.zero_grad(set_to_none=True)
         return {'loss': losses.avg, 'accuracy': top1.avg.item(), 'top5': top5.avg.item()}
 
-    def _eval(self, loader, epoch, task_num):
+    def _eval(self, loader, epoch, task_num, bias_correct=False):
         batch_time = AverageMeter('Time', ':6.3f')
         losses = AverageMeter('Loss', ':.4e')
         top1 = AverageMeter('Acc@1', ':6.2f')
@@ -322,7 +300,8 @@ class BiC(EEIL):
 
                 # compute output
                 output, feature = self.model(images)
-                output = self.bias_forward(output, task_num)
+                if bias_correct:
+                    output = self.bias_forward(output, task_num,self.bias_layers[task_num-1])
 
                 features = F.normalize(feature[-1])
                 if task_num > 1 and not (self.configs['natural_inversion'] or self.configs['generative_inversion']):
@@ -352,28 +331,29 @@ class BiC(EEIL):
                 end = time.time()
                 i += 1
         if task_num == 1 or (self.configs['natural_inversion'] or self.configs['generative_inversion']):
-            self.logger.info('[eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f}'.format(
-                epoch, losses.avg, top1.avg, top5.avg))
+            self.logger.info('[{:2d}/{:2d} task eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f}'.format(
+            task_num,self.configs['task_size'],epoch, losses.avg, top1.avg, top5.avg))
         else:
-            self.logger.info('[eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f} | NMS: {:.4f}'.format(
-                epoch, losses.avg, top1.avg, top5.avg, 100.*nms_correct/all_total))
+            self.logger.info('[{:2d}/{:2d} task eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f} | NMS: {:.4f}'.format(
+                task_num,self.configs['task_size'], epoch, losses.avg, top1.avg, top5.avg, 100.*nms_correct/all_total))
 
         return {'loss': losses.avg, 'accuracy': top1.avg.item(), 'top5': top5.avg.item()}
 
     def train_bias_correction(self, train_loader, valid_loader, epoch, task_num):
         bias_correction_best_acc = 0
-        for e in range(self.configs['bias_correction_epochs']):
+        optimizer=torch.optim.SGD(self.bias_layers[task_num-1].parameters(), lr=self.configs['lr'], momentum=self.configs['momentum'], weight_decay=self.configs['weight_decay'])
+        lr_scheduler=torch.optim.lr_scheduler.MultiStepLR(optimizer,self.configs['lr_steps'], gamma=self.configs['gamma'])
+
+        self.model.eval()
+        for e in range(1,self.configs['epochs']+1):
             tik = time.time()
             batch_time = AverageMeter('Time', ':6.3f')
             losses = AverageMeter('Loss', ':.4e')
             top1 = AverageMeter('Acc@1', ':6.2f')
             top5 = AverageMeter('Acc@5', ':6.2f')
-            progress = ProgressMeter(
-                len(train_loader),
-                [batch_time, losses, top1, top5],
-                prefix="Epoch: [{}]".format(epoch))
             i = 0
             end = time.time()
+            self.bias_layers[task_num-1].train()
             for images, target, indices in train_loader:
                 # measure data loading time
                 images, target = images.to(
@@ -381,9 +361,10 @@ class BiC(EEIL):
                 # target_reweighted = get_one_hot(target, self.current_num_classes)
                 with torch.no_grad():
                     outputs, _ = self.model(images)
-                outputs = self.bias_forward(outputs, task_num)
+                outputs = self.bias_forward(
+                    outputs, task_num, self.bias_layers[task_num-1])
                 loss = self.criterion(
-                    outputs[:, :self.current_num_classes], target)
+                    outputs, target)
 
                 # measure accuracy and record loss
                 acc1, acc5 = accuracy(outputs, target, topk=(1, 5))
@@ -391,45 +372,41 @@ class BiC(EEIL):
                 top1.update(acc1[0]*100.0, images.size(0))
                 top5.update(acc5[0]*100.0, images.size(0))
                 # compute gradient and do SGD step
-                for i in range(task_num - 1):
-                    self.bias_optimizers[i].zero_grad()
+                optimizer.zero_grad()
                 loss.backward()
-                for i in range(task_num - 1):
-                    self.bias_optimizers[i].step()
+                optimizer.step()
 
                 # measure elapsed time
                 batch_time.update(time.time() - end)
                 end = time.time()
-                if i % int(len(train_loader)//2) == 0:
-                    progress.display(i)
                 i += 1
-
+            lr_scheduler.step()
             tok = time.time()
-            self.logger.info('[BiC train] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f} | time: {:.3f}'.format(
-                losses.avg, top1.avg, top5.avg, tok-tik))
-            for i in range(task_num - 1):
-                self.bias_optimizers[i].zero_grad(set_to_none=True)
+            self.logger.info('[{:2d}/{:2d} task BiC train] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f} | time: {:.3f}'.format(
+                task_num,self.configs['task_size'], e, losses.avg, top1.avg, top5.avg, tok-tik))
 
-            if e % 10 == 0:
-                valid_info = self._eval(valid_loader, epoch, task_num)
-                self.logger.info('[BiC valid] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f}'.format(
-                    valid_info['loss'], valid_info['accuracy'], valid_info['top5']))
+            self.bias_layers[task_num-1].eval()
+            valid_info = self._eval(valid_loader, epoch, task_num, bias_correct=True)
+            self.logger.info('[{:2d}/{:2d} task BiC valid] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f}'.format(
+                task_num,self.configs['task_size'], e, valid_info['loss'], valid_info['accuracy'], valid_info['top5']))
 
-                if bias_correction_best_acc < valid_info['accuracy']:
-                    bias_correction_best_acc = valid_info['accuracy']
-                    self.logger.info("[Task {:2d} Bias Correction Best Acc] {:.2f}".format
-                                     (task_num, bias_correction_best_acc))
-                    model_dict = self.model.module.state_dict()
-                    save_dict = {
-                        'info': valid_info,
-                        'model': model_dict,
+            if bias_correction_best_acc < valid_info['accuracy']:
+                bias_correction_best_acc = valid_info['accuracy']
+                bias_correction_best_top5 = valid_info['top5']
+                bias_correction_best_loss= valid_info['loss']
+                self.logger.info("[Task {:2d} Bias Correction Best Acc] {:.2f}".format
+                                    (task_num, bias_correction_best_acc))
+                model_dict = self.model.module.state_dict()
+                save_dict = {
+                    'info': valid_info,
+                    'model': model_dict,
 
-                        # 'optim': optimizer_dict,
-                    }
-                    save_dict.update(
-                        {'task{}_bic_model_{}'.format(task_num, i): self.bias_layers[i].state_dict() for i in range(task_num - 1)})
-                    torch.save(save_dict, os.path.join(
-                        self.save_path, self.time_data, 'best_task{}_bias_corrected_model.pt'.format(task_num)))
-                    print("Save Best Accuracy Model")
+                    # 'optim': optimizer_dict,
+                }
+                save_dict.update(
+                    {'task{}_bic_model_{}'.format(task_num, i): self.bias_layers[i].state_dict() for i in range(task_num - 1)})
+                torch.save(save_dict, os.path.join(
+                    self.save_path, self.time_data, 'best_task{}_bias_corrected_model.pt'.format(task_num)))
+                print("Save Best Accuracy Model")
 
-        return {'loss': losses.avg, 'accuracy': top1.avg.item(), 'top5': top5.avg.item()}
+        return {'loss': bias_correction_best_loss, 'accuracy': bias_correction_best_acc, 'top5': bias_correction_best_top5}
