@@ -56,8 +56,6 @@ class ICARL(Baseline):
         tik = time.time()
         learning_time = AverageMeter('Time', ':6.3f')
         tasks_acc = []
-        finetune_acc = []
-
         # Task Init loader #
         self.model.eval()
 
@@ -76,15 +74,12 @@ class ICARL(Baseline):
             ), self.configs['lr'], self.configs['momentum'], weight_decay=self.configs['weight_decay'], nesterov=self.configs['nesterov'])
             lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
                 optimizer, self.configs['lr_steps'], self.configs['gamma'])
-            adding_classes_list = [self.task_step *
-                                   (task_num-1), self.task_step*task_num]
 
-            self.datasetloader.train_data.update(
-                adding_classes_list, self.exemplar_set)  # update for class incremental style #
-            self.datasetloader.test_data.update(
-                adding_classes_list, self.exemplar_set)  # Don't need to update loader
-
+            ## before training setupe the dataset ##            
+            self.construct_task_dataset(task_num, valid_loader)
             ###################
+            
+            ## regular training process ##
             for epoch in range(1, self.configs['epochs'] + 1):
                 epoch_tik = time.time()
 
@@ -132,27 +127,7 @@ class ICARL(Baseline):
             print('Task {} Finished. [Acc] {:.2f} [Running Time] {:2d}h {:2d}m {:2d}s'.format(
                 task_num, task_best_valid_acc, h, m, s))
             tasks_acc.append(task_best_valid_acc)
-            #####################
-
-            ## after train- process exemplar set ##
-            self.model.eval()
-            print('')
-            with torch.no_grad():
-                m = int(self.configs['memory_size'] /
-                        self.current_num_classes)
-                self._reduce_exemplar_sets(m)  # exemplar reduce
-                # for each class
-                for class_id in range(self.task_step*(task_num-1), self.task_step*(task_num)):
-                    print('\r Construct class %s exemplar set...' %
-                            (class_id), end='')
-                    self._construct_exemplar_set(class_id, m)
-
-                self.compute_exemplar_class_mean()
-                KNN_accuracy = self._eval(
-                    valid_loader, epoch, task_num)['accuracy']
-                self.logger.info(
-                    "NMS accuracy: {}".format(str(KNN_accuracy)))
-
+            self.update_old_model()
             self.current_num_classes += self.task_step
             #######################################
         tok = time.time()
@@ -160,7 +135,7 @@ class ICARL(Baseline):
         print('Total Learning Time: {:2d}h {:2d}m {:2d}s'.format(
             h, m, s))
         str_acc = ' '.join("{:.2f}".format(x) for x in tasks_acc)
-        self.logger.info("Task Accs:", str_acc)
+        self.logger.info("Task Accs: {}".format( str_acc))
 
         ############## info save #################
         import copy
@@ -246,9 +221,9 @@ class ICARL(Baseline):
             i += 1
 
         tok = time.time()
-        self.logger.info('[train] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f} | time: {:.3f}'.format(
-            losses.avg, top1.avg, top5.avg, tok-tik))
-
+        self.logger.info('[{:2d}/{:2d} task train] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f} | time: {:.3f}'.format(
+            task_num,self.configs['task_size'], losses.avg, top1.avg, top5.avg, tok-tik))
+        optimizer.zero_grad(set_to_none=True)
         return {'loss': losses.avg, 'accuracy': top1.avg.item(), 'top5': top5.avg.item()}
 
     def _eval(self, loader, epoch, task_num):
@@ -299,11 +274,11 @@ class ICARL(Baseline):
                 end = time.time()
                 i += 1
         if task_num == 1 or (self.configs['natural_inversion'] or self.configs['generative_inversion']):
-            self.logger.info('[eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f}'.format(
-                epoch, losses.avg, top1.avg, top5.avg))
+            self.logger.info('[{:2d}/{:2d} task eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f}'.format(
+            task_num,self.configs['task_size'],epoch, losses.avg, top1.avg, top5.avg))
         else:
-            self.logger.info('[eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f} | NMS: {:.4f}'.format(
-                epoch, losses.avg, top1.avg, top5.avg, 100.*nms_correct/all_total))
+            self.logger.info('[{:2d}/{:2d} task eval] [{:3d} epoch] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f} | NMS: {:.4f}'.format(
+                task_num,self.configs['task_size'], epoch, losses.avg, top1.avg, top5.avg, 100.*nms_correct/all_total))
 
         return {'loss': losses.avg, 'accuracy': top1.avg.item(), 'top5': top5.avg.item()}
 
@@ -430,3 +405,38 @@ class ICARL(Baseline):
                 model.module.linear.weight.requires_grad = fix
                 model.module.linear.bias.requires_grad = fix
         return model
+
+    
+    def construct_task_dataset(self,task_num, valid_loader):
+        self.model.eval()
+        adding_classes_list = [self.task_step *
+                                (task_num-1), self.task_step*task_num]
+        if task_num > 1:
+            self.old_model.eval()
+        ## after train- process exemplar set ##
+
+        if task_num >1:
+            self.model.eval()
+            print('')
+            with torch.no_grad():
+                m = int(self.configs['memory_size'] /
+                        self.current_num_classes)
+                self._reduce_exemplar_sets(m)  # exemplar reduce
+                # for each class
+                for class_id in range(self.task_step*(task_num-2), self.task_step*(task_num-1)):
+                    print('\r Construct class %s exemplar set...' %
+                            (class_id), end='')
+                    self._construct_exemplar_set(class_id, m)
+
+                self.compute_exemplar_class_mean()
+                KNN_accuracy = self._eval(
+                    valid_loader, 0, task_num)['accuracy']
+                self.logger.info(
+                    "NMS accuracy: {}".format(str(KNN_accuracy)))
+
+
+        self.datasetloader.train_data.update(
+            adding_classes_list, self.exemplar_set)  # update for class incremental style #
+        self.datasetloader.test_data.update(
+            adding_classes_list, self.exemplar_set)  # Don't need to update loader
+        self.model.train()
