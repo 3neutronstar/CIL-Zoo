@@ -59,13 +59,11 @@ class EEIL(ICARL):
             ), self.configs['lr'], self.configs['momentum'], weight_decay=self.configs['weight_decay'], nesterov=self.configs['nesterov'])
             lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
                 optimizer, self.configs['lr_steps'], self.configs['gamma'])
-            adding_classes_list = [self.task_step *
-                                   (task_num-1), self.task_step*task_num]
-            self.datasetloader.train_data.update(
-                adding_classes_list, self.exemplar_set)  # update for class incremental style #
-            self.datasetloader.test_data.update(
-                adding_classes_list, self.exemplar_set)  # Don't need to update loader
 
+            ## before training setupe the dataset ##            
+            self.construct_task_dataset(task_num,valid_loader)
+            ########################################
+            
             task_best_valid_acc = 0
             for epoch in range(1, self.configs['epochs'] + 1):
                 epoch_tik = time.time()
@@ -106,10 +104,15 @@ class EEIL(ICARL):
                     size_of_bft_exemplar)
                 if 'cifar' in self.configs['dataset']:
                     print("Len bft data: {}".format(len(bft_train_dataset[0])))
-                    images, labels = data_augmentation_e2e(
-                        bft_train_dataset[0], bft_train_dataset[1])
-                    bft_dataset = self.dataset_class(
-                        images, labels, self.datasetloader.test_transform, return_idx=True)
+                    if self.configs['eeil_aug']:
+                        images, labels = data_augmentation_e2e(
+                            bft_train_dataset[0], bft_train_dataset[1])
+                        bft_dataset = self.dataset_class(
+                            images, labels, self.datasetloader.test_transform, return_idx=True)
+                    else:
+                        bft_dataset = self.dataset_class(
+                            bft_train_dataset[0],bft_train_dataset[1], self.datasetloader.test_transform, return_idx=True)
+                        
                     print("After EEIL Len: {}".format(len(bft_dataset)))
                 elif self.configs['dataset'] in ['tiny-imagenet', 'imagenet']:
                     bft_dataset = self.dataset_class(
@@ -126,27 +129,6 @@ class EEIL(ICARL):
                     "[{} task] Fine-tune accuracy: {:.2f}".format(task_num, valid_info['accuracy']))
             finetune_acc.append(valid_info['accuracy'])
             self.update_old_model()
-            #######################################
-
-            ## after train- process exemplar set ##
-            self.model.eval()
-            print('')
-            with torch.no_grad():
-                m = int(self.configs['memory_size'] /
-                        self.current_num_classes)
-                self._reduce_exemplar_sets(m)  # exemplar reduce
-                # for each class
-                for class_id in range(self.task_step*(task_num-1), self.task_step*(task_num)):
-                    print('\r Construct class %s exemplar set...' %
-                            (class_id), end='')
-                    self._construct_exemplar_set(class_id, m)
-
-                self.compute_exemplar_class_mean()
-                KNN_accuracy = self._eval(
-                    valid_loader, epoch, task_num)['accuracy']
-                self.logger.info(
-                    "NMS accuracy: {}".format(str(KNN_accuracy)))
-
             self.current_num_classes += self.task_step
             #######################################
 
@@ -213,16 +195,16 @@ class EEIL(ICARL):
             outputs, _ = self.model(images)
 
             if task_num == 1:
-                loss = self.onehot_criterion(outputs, target_reweighted)
+                loss = self.criterion(outputs, target)
             else:  # after the normal learning
-                cls_loss = self.onehot_criterion(outputs, target_reweighted)
+                cls_loss = self.criterion(outputs, target)
                 with torch.no_grad():
                     score, _ = self.old_model(images)
                 if balance_finetune:
                     soft_target = torch.softmax(score[:, self.current_num_classes -
-                                                      self.task_step:self.current_num_classes]/self.configs['temperature'], dim=1)
+                                                    self.task_step:self.current_num_classes]/self.configs['temperature'], dim=1)
                     output_logits = (outputs[:, self.current_num_classes -
-                                             self.task_step:self.current_num_classes]/self.configs['temperature'])
+                                            self.task_step:self.current_num_classes]/self.configs['temperature'])
                     # distillation entropy loss
                     kd_loss = self.configs['lamb'] * \
                         self.onehot_criterion(output_logits, soft_target)
@@ -264,8 +246,8 @@ class EEIL(ICARL):
             i += 1
 
         tok = time.time()
-        self.logger.info('[train] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f} | time: {:.3f}'.format(
-            losses.avg, top1.avg, top5.avg, tok-tik))
+        self.logger.info('[{:2d}/{:2d} task train] Loss: {:.4f} | top1: {:.4f} | top5: {:.4f} | time: {:.3f}'.format(
+            task_num,self.configs['task_size'], losses.avg, top1.avg, top5.avg, tok-tik))
         optimizer.zero_grad(set_to_none=True)
         return {'loss': losses.avg, 'accuracy': top1.avg.item(), 'top5': top5.avg.item()}
 
